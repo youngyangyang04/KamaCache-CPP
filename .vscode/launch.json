@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "xmake",
+            "request": "launch",
+            "name": "Launch",
+            "target": "Target",
+            "cwd": "",
+            "stopAtEntry": true
+        },
+    ]
+}
