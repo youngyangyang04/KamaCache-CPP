@@ -27,9 +27,12 @@ auto NewCacheGroup(const std::string& name, int64_t bytes, Getter getter) -> Cac
     return cache_groups[name];
 }
 
-auto GetCacheGroup(const std::string& name) -> CacheGroup& {
+auto GetCacheGroup(const std::string& name) -> CacheGroup* {
     std::lock_guard lock{mtx};
-    return cache_groups[name];
+    if (!cache_groups.contains(name)) {
+        return nullptr;
+    }
+    return &cache_groups[name];
 }
 
 auto CacheGroup::Get(const std::string& key) -> std::optional<ValueRef> {

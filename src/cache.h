@@ -66,7 +66,7 @@ private:
 };
 
 auto NewCacheGroup(const std::string& name, int64_t bytes, Getter getter) -> CacheGroup&;
-auto GetCacheGroup(const std::string& name) -> CacheGroup&;
+auto GetCacheGroup(const std::string& name) -> CacheGroup*;
 
 }  // namespace kcache
 
