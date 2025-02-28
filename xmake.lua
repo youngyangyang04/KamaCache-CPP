@@ -3,9 +3,11 @@ add_rules("mode.debug", "mode.release")
 set_languages("c++20")
 
 add_requires("gtest", {configs = {main = true, gmock = false}})
+add_requires("cpp-httplib")
 
 target("kcache")
     set_kind("binary")
+    add_packages("cpp-httplib")
     add_files("src/*.cpp")
 
 -- 定义一个函数来创建测试目标
