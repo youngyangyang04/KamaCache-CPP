@@ -1,10 +1,12 @@
 #include "lru.h"
 
+#include <mutex>
 #include <optional>
 
 namespace kcache {
 
 auto LRUCache::Get(const std::string& key) -> std::optional<ValueRef> {
+    std::lock_guard _{mtx_};
     if (!cache_.contains(key)) {
         return std::nullopt;
     }
@@ -17,6 +19,7 @@ auto LRUCache::Get(const std::string& key) -> std::optional<ValueRef> {
 }
 
 void LRUCache::Put(const std::string& key, const ValueRef& value) {
+    std::lock_guard _{mtx_};
     if (cache_.contains(key)) {
         // remove old
         auto ele = cache_[key];

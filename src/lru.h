@@ -5,6 +5,7 @@
 #include <functional>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -33,7 +34,8 @@ class LRUCache {
     using ListElementIter = typename std::list<Entry>::iterator;
 
 public:
-    LRUCache(int max_bytes, const EvictedFunc& evicted_func) : max_bytes_(max_bytes), evicted_func_(evicted_func) {}
+    LRUCache(int max_bytes, const EvictedFunc& evicted_func = nullptr)
+        : max_bytes_(max_bytes), evicted_func_(evicted_func) {}
 
     auto Get(const std::string& key) -> std::optional<ValueRef>;
     void Put(const std::string& key, const ValueRef&);
@@ -46,6 +48,7 @@ private:
 
     std::unordered_map<std::string, ListElementIter> cache_;
     std::list<Entry> list_;
+    std::mutex mtx_;
 };
 
 }  // namespace kcache
