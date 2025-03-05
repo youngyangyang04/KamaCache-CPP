@@ -1,0 +1,7 @@
+{
+  "dependencies": [
+    "cpp-httplib",
+    "gtest",
+    "zlib"
+  ]
+}
