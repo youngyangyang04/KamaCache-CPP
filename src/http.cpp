@@ -2,11 +2,57 @@
 
 #include <cstddef>
 #include <format>
+#include <memory>
+#include <mutex>
 #include <string>
 
 #include "cache.h"
+#include "consistent_hash.h"
 
 namespace kcache {
+
+auto Peer::Get(const std::string& group_name, const std::string& key) -> std::optional<std::string> {
+    // 还记得请求的格式嘛：http://<host>:<port>/<basepath>/<groupname>/<key>
+    // base_url_ 对应了 http://<host>:<port>
+
+    httplib::Client cli(base_url_);
+    auto res = cli.Get(std::format("{}{}/{}", base_path_, group_name, key));
+    if (!res) {
+        return std::nullopt;
+    }
+
+    if (res->status != 200) {
+        std::cout << std::format("server returned: {}\n", res->status);
+        return std::nullopt;
+    }
+
+    if (res->body.empty()) {
+        std::cout << std::format("server err: {}\n", httplib::to_string(res.error()));
+        return std::nullopt;
+    }
+
+    return res->body;
+}
+
+void HTTPPool::SetPeers(const std::vector<std::string>& peer_addrs) {
+    std::lock_guard lock{mtx_};
+    peers_hash_ = ConsistentHash{default_relicas};
+    peers_hash_.AddNodes(peer_addrs);
+    peers_.clear();
+    for (const auto& peer_addr : peer_addrs) {
+        peers_[peer_addr] = Peer{peer_addr, base_path_};
+    }
+    // peers_hash_.PrintHashRing();
+}
+
+auto HTTPPool::GetPeer(const std::string& key) -> Peer* {
+    std::lock_guard lock{mtx_};
+    if (auto peer_name = peers_hash_.GetNodeName(key); !peer_name.empty() && peer_name != self_) {
+        std::cout << std::format("pick peer: {}\n", peer_name);
+        return &peers_[peer_name];
+    }
+    return nullptr;
+}
 
 void HTTPPool::HandleRequest(const httplib::Request& req, httplib::Response& res) {
     // 请求格式为：http://<host>:<port>/<basepath>/<groupname>/<key>

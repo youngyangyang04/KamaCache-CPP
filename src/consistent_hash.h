@@ -6,16 +6,22 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <format>
 #include <functional>
+#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 namespace kcache {
 
+constexpr uint32_t default_relicas = 10;
+
 class ConsistentHash {
 public:
     using HashFunc = std::function<uint32_t(const std::string&)>;
+
+    ConsistentHash() = default;
 
     explicit ConsistentHash(uint32_t replicas, HashFunc hash = std::hash<std::string>{})
         : replicas_(replicas), hash_(hash) {}
@@ -55,6 +61,13 @@ public:
             it = node_hash_val_.begin();
         }
         return map_.at(*it);
+    }
+
+    void PrintHashRing() {
+        int i = 1;
+        for (const auto& node_hash_val : node_hash_val_) {
+            std::cout << std::format("{}. {}\n", i++, map_[node_hash_val]);
+        }
     }
 
 private:

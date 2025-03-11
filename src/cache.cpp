@@ -1,15 +1,17 @@
 #include "cache.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <format>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
 
+#include "http.h"
 #include "lru.h"
 
 namespace kcache {
@@ -41,13 +43,33 @@ auto CacheGroup::Get(const std::string& key) -> std::optional<ValueRef> {
     }
     auto ret = cache_->Get(key);
     if (ret) {
-        std::cout << "[Cache] cache hit\n";
+        std::cout << std::format("^_^ cache hit, search [\"{}\"] from \"http://{}:{}\" \n", key, peers_->GetHost(),
+                                 peers_->GetPort());
         return ret;
     }
     return Load(key);
 }
 
-auto CacheGroup::Load(const std::string& key) -> std::optional<ValueRef> { return LoadFromLocal(key); }
+void CacheGroup::RegisterPeers(std::unique_ptr<HTTPPool>&& peers) {
+    if (peers_) {
+        std::cout << "call RegisterPeers more than once!\n";
+        std::terminate();
+    }
+    peers_ = std::move(peers);
+    peers_->Start();
+}
+
+auto CacheGroup::Load(const std::string& key) -> std::optional<ValueRef> {
+    if (peers_) {
+        if (auto peer = peers_->GetPeer(key); peer) {
+            if (auto ret = LoadFromPeer(peer, key); ret) {
+                return ret;
+            }
+            std::cout << "fail to get from peer\n";
+        }
+    }
+    return LoadFromLocal(key);
+}
 
 auto CacheGroup::LoadFromLocal(const std::string& key) -> std::optional<ValueRef> {
     auto ret = getter_(key);
@@ -57,6 +79,14 @@ auto CacheGroup::LoadFromLocal(const std::string& key) -> std::optional<ValueRef
     auto value = ret.value();
     cache_->Put(key, value);
     return value;
+}
+
+auto CacheGroup::LoadFromPeer(Peer* peer, const std::string& key) -> std::optional<ValueRef> {
+    auto ret = peer->Get(name_, key);
+    if (!ret) {
+        return std::nullopt;
+    }
+    return std::make_shared<ByteValue>(ret.value());
 }
 
 }  // namespace kcache

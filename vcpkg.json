@@ -2,6 +2,7 @@
   "dependencies": [
     "cpp-httplib",
     "gtest",
-    "zlib"
+    "zlib",
+    "gflags"
   ]
 }

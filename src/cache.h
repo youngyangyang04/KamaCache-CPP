@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "http.h"
 #include "lru.h"
 namespace kcache {
 
@@ -55,14 +56,18 @@ public:
 
     auto Get(const std::string& key) -> std::optional<ValueRef>;
 
+    void RegisterPeers(std::unique_ptr<HTTPPool>&& peers);
+
 private:
     auto Load(const std::string& key) -> std::optional<ValueRef>;
     auto LoadFromLocal(const std::string& key) -> std::optional<ValueRef>;
+    auto LoadFromPeer(Peer* peer, const std::string& key) -> std::optional<ValueRef>;
 
 private:
     std::unique_ptr<LRUCache> cache_;
     std::string name_;
     Getter getter_;
+    std::unique_ptr<HTTPPool> peers_;
 };
 
 auto NewCacheGroup(const std::string& name, int64_t bytes, Getter getter) -> CacheGroup&;
