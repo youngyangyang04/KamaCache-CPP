@@ -13,6 +13,7 @@
 
 #include "http.h"
 #include "lru.h"
+#include "singleflight.h"
 namespace kcache {
 
 struct ByteValue : public Value {
@@ -65,9 +66,10 @@ private:
 
 private:
     std::unique_ptr<LRUCache> cache_;
+    std::unique_ptr<HTTPPool> peers_;
     std::string name_;
     Getter getter_;
-    std::unique_ptr<HTTPPool> peers_;
+    SingleFlight loader_;
 };
 
 auto NewCacheGroup(const std::string& name, int64_t bytes, Getter getter) -> CacheGroup&;

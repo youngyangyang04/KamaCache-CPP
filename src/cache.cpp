@@ -60,15 +60,17 @@ void CacheGroup::RegisterPeers(std::unique_ptr<HTTPPool>&& peers) {
 }
 
 auto CacheGroup::Load(const std::string& key) -> std::optional<ValueRef> {
-    if (peers_) {
-        if (auto peer = peers_->GetPeer(key); peer) {
-            if (auto ret = LoadFromPeer(peer, key); ret) {
-                return ret;
+    return loader_.Do(key, [&] {
+        if (peers_) {
+            if (auto peer = peers_->GetPeer(key); peer) {
+                if (auto ret = LoadFromPeer(peer, key); ret) {
+                    return ret;
+                }
+                std::cout << "fail to get from peer\n";
             }
-            std::cout << "fail to get from peer\n";
         }
-    }
-    return LoadFromLocal(key);
+        return LoadFromLocal(key);
+    });
 }
 
 auto CacheGroup::LoadFromLocal(const std::string& key) -> std::optional<ValueRef> {
