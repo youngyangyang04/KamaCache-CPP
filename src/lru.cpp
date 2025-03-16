@@ -6,12 +6,12 @@
 namespace kcache {
 
 auto LRUCache::Get(const std::string& key) -> std::optional<ValueRef> {
-    std::lock_guard _{mtx_};
+    std::lock_guard lock{mtx_};
     if (!cache_.contains(key)) {
         return std::nullopt;
     }
     auto ele = cache_[key];
-    auto [_, value] = *ele;
+    auto [k, value] = *ele;
     list_.erase(ele);
     list_.emplace_front(key, value);
     cache_[key] = list_.begin();

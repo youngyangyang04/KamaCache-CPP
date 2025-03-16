@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "http.h"
+#include "kcache.pb.h"
 #include "lru.h"
 
 namespace kcache {
@@ -84,11 +85,16 @@ auto CacheGroup::LoadFromLocal(const std::string& key) -> std::optional<ValueRef
 }
 
 auto CacheGroup::LoadFromPeer(Peer* peer, const std::string& key) -> std::optional<ValueRef> {
-    auto ret = peer->Get(name_, key);
+    // 从 peer 节点获取反序列化后的结果
+    pb::Request req{};
+    pb::Response resp{};
+    req.set_group(name_);
+    req.set_key(key);
+    bool ret = peer->Get(&req, &resp);
     if (!ret) {
         return std::nullopt;
     }
-    return std::make_shared<ByteValue>(ret.value());
+    return std::make_shared<ByteValue>(resp.value());
 }
 
 }  // namespace kcache

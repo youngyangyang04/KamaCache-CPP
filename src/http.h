@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "consistent_hash.h"
+#include "kcache.pb.h"
 
 namespace kcache {
 
@@ -27,7 +28,7 @@ public:
     explicit Peer(const std::string& base_url, const std::string& base_path)
         : base_url_(base_url), base_path_(base_path) {}
 
-    auto Get(const std::string& group_name, const std::string& key) -> std::optional<std::string>;
+    auto Get(pb::Request* req, pb::Response* res) -> bool;
 
 private:
     std::string base_url_;

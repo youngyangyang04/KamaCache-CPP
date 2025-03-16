@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package kcache.pb;
+
+message Request {
+    string group = 1;
+    string key = 2;
+}
+
+message Response {
+    bytes value = 1;
+}
+
+service CacheGroup {
+    rpc Get(Request) returns (Response);
+}

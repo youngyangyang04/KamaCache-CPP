@@ -8,30 +8,32 @@
 
 #include "cache.h"
 #include "consistent_hash.h"
+#include "kcache.pb.h"
 
 namespace kcache {
 
-auto Peer::Get(const std::string& group_name, const std::string& key) -> std::optional<std::string> {
+auto Peer::Get(pb::Request* in, pb::Response* out) -> bool {
     // 还记得请求的格式嘛：http://<host>:<port>/<basepath>/<groupname>/<key>
     // base_url_ 对应了 http://<host>:<port>
 
     httplib::Client cli(base_url_);
-    auto res = cli.Get(std::format("{}{}/{}", base_path_, group_name, key));
+    auto res = cli.Get(std::format("{}{}/{}", base_path_, in->group(), in->key()));
     if (!res) {
-        return std::nullopt;
+        return false;
     }
 
     if (res->status != 200) {
         std::cout << std::format("server returned: {}\n", res->status);
-        return std::nullopt;
+        return false;
     }
 
-    if (res->body.empty()) {
-        std::cout << std::format("server err: {}\n", httplib::to_string(res.error()));
-        return std::nullopt;
+    // 从 body 中反序列化解析出 protobuf 数据
+    if (!out->ParseFromString(res->body)) {
+        std::cout << "protobuf decoding err!\n";
+        return false;
     }
 
-    return res->body;
+    return true;
 }
 
 void HTTPPool::SetPeers(const std::vector<std::string>& peer_addrs) {
@@ -92,8 +94,30 @@ void HTTPPool::HandleRequest(const httplib::Request& req, httplib::Response& res
         return;
     }
 
-    std::string value = ret.value()->ToString();
-    res.set_content(value, "application/octet-stream");
+    // 使用 protobuf 将结果序列化后再响应回去
+
+    std::string body;
+    pb::Response pb_resp{};
+    pb_resp.set_value(ret.value()->ToString());
+
+    if (!pb_resp.SerializeToString(&body)) {
+        res.status = 500;
+        res.set_content("protobuf failed to serialize response", "text/plain");
+        return;
+    }
+
+    // 如果对序列化的结果感兴趣，可以使用下面的代码打印
+    // auto ToHex = [](const std::string& binaryData) {
+    //     std::ostringstream oss;
+    //     for (unsigned char c : binaryData) {
+    //         oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(c);
+    //     }
+    //     return oss.str();
+    // };
+    // std::cout << std::format("[protobuf] {}\n", ToHex(body));
+
+    res.set_header("Content-Type", "application/octet-stream");
+    res.set_content(body, "application/octet-stream");
 }
 
 }  // namespace kcache
