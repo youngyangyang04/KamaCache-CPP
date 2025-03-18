@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.23)
 project(KCache)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -64,10 +64,10 @@ target_link_libraries(kcache PRIVATE httplib::httplib ZLIB::ZLIB gflags::gflags
 # --------------------------------- test_http -------------------------------- #
 file(GLOB SRC_CPP CONFIGURE_DEPENDS "src/*.cpp")
 list(REMOVE_ITEM SRC_CPP ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
-add_executable(test_http test/test_http.cpp ${SRC_CPP})
+add_executable(test_http test/test_http.cpp ${SRC_CPP} ${PROTO_GEN_FILES})
 target_link_libraries(test_http PRIVATE GTest::gtest_main httplib::httplib
-                                        ZLIB::ZLIB)
-target_include_directories(test_http PRIVATE src)
+                                        ZLIB::ZLIB protobuf::libprotobuf)
+target_include_directories(test_http PRIVATE src ${PROTO_GEN_DIR})
 # --------------------------------- test_http -------------------------------- #
 
 # ---------------------------------- 其他单元测试 ---------------------------------- #
@@ -80,10 +80,11 @@ foreach(test_file ${TEST_FILES})
 
     # test_http 单独设置
     if(NOT test_name STREQUAL "test_http")
-        add_executable(${test_name} ${test_file} ${SRC_CPP})
-        target_link_libraries(${test_name} PRIVATE GTest::gtest_main
-                                                   httplib::httplib ZLIB::ZLIB)
-        target_include_directories(${test_name} PRIVATE src)
+        add_executable(${test_name} ${test_file} ${SRC_CPP} ${PROTO_GEN_FILES})
+        target_link_libraries(
+            ${test_name} PRIVATE GTest::gtest_main httplib::httplib ZLIB::ZLIB  
+                                 protobuf::libprotobuf)
+        target_include_directories(${test_name} PRIVATE src ${PROTO_GEN_DIR})
         add_test(NAME ${test_name} COMMAND ${test_name})
     endif()
 endforeach()

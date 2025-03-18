@@ -2,7 +2,7 @@
 
 【代码随想录知识星球】项目分享-分布式缓存项目
 
-KCache 是一个分布式缓存系统，支持一致性哈希和LRU缓存淘汰策略。该项目使用C++编写，使用 vcpkg 作为包管理工具、CMake 作为项目的构建工具。
+KCache 是一个分布式缓存系统，支持一致性哈希和LRU缓存淘汰策略。该项目使用C++编写，可选择 vcpkg 或 conan 作为包管理工具，使用 CMake 作为项目的构建工具。
 
 ![alt text](https://obsidian-image-oss.oss-cn-shanghai.aliyuncs.com/kcache_architecture)
 
@@ -36,6 +36,7 @@ KCache 是一个分布式缓存系统，支持一致性哈希和LRU缓存淘汰�
 ├── CMakeLists.txt
 ├── CMakePresets.json
 ├── CMakeUserPresets.json
+├── conanfile.txt
 ├── LICENSE
 ├── README.md
 ├── run_cache_cluster.sh
@@ -48,42 +49,65 @@ KCache 是一个分布式缓存系统，支持一致性哈希和LRU缓存淘汰�
 
 项目依赖如下：
 
-- cpp-httplib
-- gflags
-- gtest
-- zlib
-- protobuf
+- cpp-httplib - http库
+- gflags - 命令行参数
+- gtest - 单元测试
+- zlib （可选）
+- protobuf - 序列化
 
-依赖管理使用 `vcpkg`，具体配置见 [vcpkg.json](vcpkg.json) 和 [vcpkg-configuration.json](vcpkg-configuration.json)。
+在该项目中可选择 [vcpkg](https://vcpkg.io/en/) 或者 [conan](https://conan.io/) 作为依赖管理，若要使用其中任意一个，请先确保你已在你的系统上安装了它。
 
 ## 构建和运行
 
 ### 使用 CMake 构建
 
-1. 设置 `CMakeUserPresets.json`:
+1. 设置 vcpkg 或者 conan 的 CMake 配置:
 
-    ```json
-    {
-        "version": 2,
-        "configurePresets": [
-            {
-                "name": "default",
-                "inherits": "vcpkg",
-                "environment": {
-                    "VCPKG_ROOT": "<path>/<to>/<your vcpkg dir>"
+    - **vcpkg**
+
+        你需要在 `CMakePresets.json` 同级目录下创建 `CMakeUserPresets.json`，并添加以下内容：
+    
+        ```json
+        {
+            "version": 2,
+            "configurePresets": [
+                {
+                    "name": "vcpkg",
+                    "inherits": "vcpkg-impl",
+                    "environment": {
+                        "VCPKG_ROOT": "<path>/<to>/<dir>"
+                    }
                 }
-            }
-        ]
-    }
-    ```
+            ]
+        }
+        ```
+
+        其中，`VCPKG_ROOT` 为你 vcpkg 的安装目录。
+
+    - **conan**
+
+        在项目根目录下执行：
+
+        ```sh
+        conan install . --build=missing -s build_type=<Debug|Release>
+        ```
+
+        Debug 和 Release 取决于你的选择。
 
 2. 配置项目：
 
     ```sh
-    cmake --preset default
+    # 如果是使用 vcpkg：
+    cmake --preset vcpkg
+
+    # 如果是使用 conan(Debug)：
+    cmake --preset conan-debug
+
+    # 如果是使用 conan(Debug)：
+    cmake --preset conan-release
     ```
 
-    执行了这条命令后，将会在 build/proto_gen 目录下生成 [src/proto/kcache.proto](src/proto/kcache.proto) 相关的 pb.cc 和 pb.h 文件。
+    执行了这条命令后，将会在 `build/proto_gen` 目录下生成 [src/proto/kcache.proto](src/proto/kcache.proto) 相关的 pb.cc 和 pb.h 文件。
 
 3. 构建项目：
 
