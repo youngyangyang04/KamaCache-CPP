@@ -2,12 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "xmake",
+            "name": "GDB",
+            "type": "cppdbg",
             "request": "launch",
-            "name": "Launch",
-            "target": "Target",
-            "cwd": "",
-            "stopAtEntry": true
-        },
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": true,
+        }
     ]
 }

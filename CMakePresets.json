@@ -2,14 +2,6 @@
     "version": 2,
     "configurePresets": [
         {
-            "name": "vcpkg-impl",
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build",
-            "cacheVariables": {
-                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-            }
-        },
-        {
             "name": "conan-debug",
             "displayName": "'conan-debug' config",
             "description": "'conan-debug' configure using 'Ninja' generator",

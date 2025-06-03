@@ -1,9 +1,0 @@
-{
-  "dependencies": [
-    "cpp-httplib",
-    "gflags",
-    "gtest",
-    "zlib",
-    "protobuf"
-  ]
-}

@@ -8,5 +8,10 @@ CMakeUserPresets.json
 .DS_Store
 
 # Vscode Cache
-.vscode/compile_commands.json
-.vscode/.cache
+.vscode/
+
+# gRPC and Protobuf
+*.pb.cc
+*.pb.h
+*.grpc.pb.cc
+*.grpc.pb.h
