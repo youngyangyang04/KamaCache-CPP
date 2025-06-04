@@ -5,12 +5,23 @@ package kcache.pb;
 message Request {
     string group = 1;
     string key = 2;
+    bytes value = 3;
 }
 
-message Response {
+message GetResponse {
     bytes value = 1;
 }
 
-service CacheGroup {
-    rpc Get(Request) returns (Response);
+message DeleteResponse {
+    bool value = 1;
+}
+
+message SetResponse {
+    bool value = 1;
+}
+
+service KCache {
+    rpc Get(Request) returns (GetResponse);
+    rpc Set(Request) returns (SetResponse);
+    rpc Delete(Request) returns (DeleteResponse);
 }

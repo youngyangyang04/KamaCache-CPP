@@ -11,12 +11,12 @@
 #include <string>
 #include <unordered_map>
 
-#include "lru.h"
+#include "kcache/cache.h"
 
 namespace kcache {
 
 class SingleFlight {
-    using Result = std::optional<ValueRef>;
+    using Result = std::optional<ByteView>;
     using Func = std::function<Result()>;
 
 public:
@@ -24,7 +24,7 @@ public:
         std::unique_lock<std::mutex> glock(mtx_);
 
         // 检查是否有进行中的调用
-        if (map_.contains(key)) {
+        if (map_.find(key) != map_.end()) {
             auto existing_call = map_[key];
             glock.unlock();  // 释放组锁，避免阻塞其他键的处理
 
