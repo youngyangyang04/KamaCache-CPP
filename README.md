@@ -39,7 +39,7 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 
 示意架构图如下：
 
-![](https://obsidian-image-oss.oss-cn-shanghai.aliyuncs.com/undefined20250606-144135.png)
+![alt text](image.png)
 
 ## 致谢
 
@@ -95,6 +95,7 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 |-- CMakeLists.txt
 |-- CMakePresets.json
 |-- conanfile.txt
+|-- image.png
 |-- LICENSE
 `-- README.md
 ```
