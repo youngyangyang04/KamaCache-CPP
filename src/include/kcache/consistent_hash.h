@@ -31,7 +31,7 @@ struct Config {
 };
 
 // DefaultConfig 默认配置
-const Config DefaultConfig = {
+const Config kDefaultConfig = {
     50,   10, 200, std::hash<std::string>{},
     0.25,  // 25% 的负载不均衡度触发调整
 };
@@ -40,7 +40,7 @@ const Config DefaultConfig = {
 class ConsistentHashMap {
 public:
     // New 创建一致性哈希实例
-    explicit ConsistentHashMap(const Config& cfg = DefaultConfig);
+    explicit ConsistentHashMap(const Config& cfg = kDefaultConfig);
 
     // 析构函数，确保负载均衡器线程正确停止
     ~ConsistentHashMap();

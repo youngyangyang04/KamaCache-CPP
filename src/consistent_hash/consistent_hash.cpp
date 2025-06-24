@@ -50,7 +50,6 @@ bool ConsistentHashMap::Remove(const std::string& node) {
 
     int replicas = it_replicas->second;
 
-    // TODO 搞懂逻辑
     // 移除节点的所有虚拟节点
     for (int i = 0; i < replicas; ++i) {
         std::string hash_key = fmt::format("{}-{}", node, std::to_string(i));
@@ -143,17 +142,18 @@ void ConsistentHashMap::CheckAndRebalance() {
         return;  // 样本太少，不进行调整
     }
 
-    // 获得读锁以访问 nodeCounts 和 nodeReplicas
     std::shared_lock lock{mtx_};
 
     if (node_replicas_.empty()) {
         return;
     }
 
+    // 计算系统平均负载：总请求数 / 物理节点数量
     long long current_total_requests = total_requests_.load();
     double avg_load = static_cast<double>(current_total_requests) / node_replicas_.size();
     double max_diff = 0.0;
 
+    // 遍历所有节点计算负载偏差，计算每个节点的负载与平均负载的差异百分比
     for (auto const& [node, count] : node_counts_) {
         double diff = std::abs(static_cast<double>(count.load()) - avg_load);
         // 避免除以零
@@ -185,45 +185,45 @@ void ConsistentHashMap::RebalanceNodes() {
 
     // 调整每个节点的虚拟节点数量
     // 注意：这里需要创建一个副本，因为在循环中可能会修改 nodeReplicas 和 nodeCounts
-    std::unordered_map<std::string, int> currentReplicas = node_replicas_;
-    std::unordered_map<std::string, long long> currentCounts;
+    std::unordered_map<std::string, int> curr_replicas = node_replicas_;
+    std::unordered_map<std::string, long long> curr_counts;
     for (auto const& [node, count] : node_counts_) {
-        currentCounts[node] = count.load();
+        curr_counts[node] = count.load();
     }
 
-    for (auto const& [node, count] : currentCounts) {
-        int oldReplicas = currentReplicas[node];
-        double loadRatio = 0.0;
+    for (auto const& [node, count] : curr_counts) {
+        int old_replicas = curr_replicas[node];
+        double load_ratio = 0.0;
         if (avg_load > 0) {
-            loadRatio = static_cast<double>(count) / avg_load;
-        } else if (count > 0) {  // If avgLoad is 0 but node has load, consider it high
-            loadRatio = 2.0;     // Arbitrary high value to trigger reduction
-        } else {                 // Both avgLoad and count are 0, no action needed for this node
-            loadRatio = 1.0;
+            load_ratio = static_cast<double>(count) / avg_load;
+        } else if (count > 0) {
+            load_ratio = 2.0;
+        } else {
+            load_ratio = 1.0;
         }
 
-        int newReplicas;
-        if (loadRatio > 1.0) {
+        int new_replicas;
+        if (load_ratio > 1.0) {
             // 负载过高，减少虚拟节点
-            newReplicas = static_cast<int>(std::round(static_cast<double>(oldReplicas) / loadRatio));
+            new_replicas = static_cast<int>(std::round(static_cast<double>(old_replicas) / load_ratio));
         } else {
             // 负载过低，增加虚拟节点
-            newReplicas = static_cast<int>(std::round(static_cast<double>(oldReplicas) * (2.0 - loadRatio)));
+            new_replicas = static_cast<int>(std::round(static_cast<double>(old_replicas) * (2.0 - load_ratio)));
         }
 
         // 确保在限制范围内
-        if (newReplicas < config_.min_replicas) {
-            newReplicas = config_.min_replicas;
+        if (new_replicas < config_.min_replicas) {
+            new_replicas = config_.min_replicas;
         }
-        if (newReplicas > config_.max_replicas) {
-            newReplicas = config_.max_replicas;
+        if (new_replicas > config_.max_replicas) {
+            new_replicas = config_.max_replicas;
         }
 
-        if (newReplicas != oldReplicas) {
+        if (new_replicas != old_replicas) {
             // 重新添加节点的虚拟节点：先移除旧的，再添加新的
             // 移除节点的所有虚拟节点
-            int replicasToRemove = node_replicas_[node];
-            for (int i = 0; i < replicasToRemove; ++i) {
+            int replicas_to_remove = node_replicas_[node];
+            for (int i = 0; i < replicas_to_remove; ++i) {
                 std::string hashKey = node + "-" + std::to_string(i);
                 int hash = static_cast<int>(config_.hash_func(hashKey));
                 hash_map_.erase(hash);
@@ -233,7 +233,7 @@ void ConsistentHashMap::RebalanceNodes() {
             node_replicas_.erase(node);
 
             // 添加新的虚拟节点
-            AddNode(node, newReplicas);
+            AddNode(node, new_replicas);
         }
     }
 
