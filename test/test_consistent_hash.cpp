@@ -1,9 +1,8 @@
-#include <fmt/base.h>
-#include <gtest/gtest.h>
-
 #include <chrono>
 #include <cstdint>
+#include <fmt/base.h>
 #include <functional>
+#include <gtest/gtest.h>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -18,7 +17,7 @@ class ConsistentHashTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Simple hash function for predictable testing
-        test_config_ = Config{
+        test_config_ = HashConfig{
             3,   // replicas
             1,   // min_replicas
             10,  // max_replicas
@@ -27,7 +26,7 @@ protected:
         };
     }
 
-    Config test_config_;
+    HashConfig test_config_;
 };
 
 TEST_F(ConsistentHashTest, DefaultConstructor) {
@@ -270,7 +269,7 @@ TEST_F(ConsistentHashTest, DuplicateNodeAddition) {
 
 TEST_F(ConsistentHashTest, SpecificHashBehavior) {
     // Test with a simple, predictable hash function
-    Config simple_config = test_config_;
+    HashConfig simple_config = test_config_;
     simple_config.replicas = 1;  // Use fewer replicas for predictable testing
     simple_config.hash_func = [](const std::string& key) -> uint32_t {
         if (key == "2") return 2;
@@ -304,7 +303,7 @@ TEST_F(ConsistentHashTest, SpecificHashBehavior) {
 
 TEST_F(ConsistentHashTest, ConfigValidation) {
     // Test with extreme configurations
-    Config extreme_config = test_config_;
+    HashConfig extreme_config = test_config_;
     extreme_config.replicas = 1000;  // Very high replicas
     extreme_config.min_replicas = 500;
     extreme_config.max_replicas = 2000;

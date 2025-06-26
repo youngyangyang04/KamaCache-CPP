@@ -1,13 +1,14 @@
 #include "kcache/registry.h"
 
 #include <arpa/inet.h>
-#include <fmt/core.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
-#include <spdlog/spdlog.h>
 #include <unistd.h>
 
 #include <chrono>
+
+#include <fmt/core.h>
+#include <spdlog/spdlog.h>
 #include <etcd/KeepAlive.hpp>
 #include <etcd/v3/Transaction.hpp>
 
@@ -55,7 +56,7 @@ void EtcdRegistry::Unregister() {
         if (!is_ok) {
             throw std::runtime_error(fmt::format("[kcache] Failed to revoke lease: {}", lease_id_));
         } else {
-            spdlog::info("Lease {} revoked successfully", lease_id_);
+            spdlog::debug("Lease {} revoked successfully", lease_id_);
         }
     }
     spdlog::info("Service unregistered: {}", key_);
@@ -86,10 +87,8 @@ void EtcdRegistry::KeepAliveLoop() {
     while (!is_stop_) {
         etcd::KeepAlive keepalive{*etcd_client_, 10, lease_id_};
         try {
-            // fmt::println("[kcache] Lease {} keepalive successful", lease_id_);
             keepalive.Check();
         } catch (const std::exception& e) {
-            // retry_count++;
             spdlog::error("Keepalive exception: {}", e.what());
             keepalive.Cancel();
         } catch (...) {

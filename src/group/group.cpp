@@ -1,20 +1,17 @@
-#include "kcache/group.h"
-
-#include <fmt/base.h>
-#include <spdlog/spdlog.h>
-
 #include <cstdint>
 #include <cstdlib>
-#include <exception>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
 
+#include <fmt/base.h>
+#include <spdlog/spdlog.h>
+
 #include "kcache/cache.h"
+#include "kcache/group.h"
 #include "kcache/peer.h"
 
 namespace kcache {

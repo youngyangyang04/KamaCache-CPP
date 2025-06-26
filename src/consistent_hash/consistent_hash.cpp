@@ -1,11 +1,13 @@
 #include "kcache/consistent_hash.h"
 
+#include <mutex>
+
 #include <fmt/base.h>
 #include <fmt/format.h>
 
 namespace kcache {
 
-ConsistentHashMap::ConsistentHashMap(const Config& cfg) : config_(cfg), total_requests_(0), is_balancer_stop_(false) {
+ConsistentHashMap::ConsistentHashMap(HashConfig cfg) : config_(cfg), total_requests_(0), is_balancer_stop_(false) {
     StartBalancer();  // 启动负载均衡器
 }
 
@@ -113,7 +115,7 @@ void ConsistentHashMap::StartBalancer() {
     balancer_thread_ = std::thread{[this] {
         while (!is_balancer_stop_) {
             std::this_thread::sleep_for(std::chrono::seconds(1));  // 每秒检查一次
-            if (!is_balancer_stop_) {                              // 再次检查，防止在 sleep 期间被要求停止
+            if (!is_balancer_stop_) {  // 再次检查，防止在 sleep 期间被要求停止
                 CheckAndRebalance();
             }
         }

@@ -1,23 +1,21 @@
 #ifndef CONSISTENT_HASH_H_
 #define CONSISTENT_HASH_H_
 
-#include <fmt/core.h>
-
-#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <functional>
-#include <mutex>
 #include <shared_mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
+#include <fmt/core.h>
+
 namespace kcache {
 
-// Config 一致性哈希配置
-struct Config {
+// 一致性哈希配置
+struct HashConfig {
     // 每个真实节点对应的虚拟节点数
     int replicas;
     // 最小虚拟节点数
@@ -31,7 +29,7 @@ struct Config {
 };
 
 // DefaultConfig 默认配置
-const Config kDefaultConfig = {
+const HashConfig kDefaultConfig = {
     50,   10, 200, std::hash<std::string>{},
     0.25,  // 25% 的负载不均衡度触发调整
 };
@@ -40,7 +38,7 @@ const Config kDefaultConfig = {
 class ConsistentHashMap {
 public:
     // New 创建一致性哈希实例
-    explicit ConsistentHashMap(const Config& cfg = kDefaultConfig);
+    explicit ConsistentHashMap(HashConfig cfg = kDefaultConfig);
 
     // 析构函数，确保负载均衡器线程正确停止
     ~ConsistentHashMap();
@@ -75,7 +73,7 @@ private:
 private:
     mutable std::shared_mutex mtx_;  // 读写互斥量，类似于 Go 的 sync.RWMutex
     // 配置信息
-    Config config_;
+    HashConfig config_;
 
     // 哈希环
     std::vector<int> keys_;
