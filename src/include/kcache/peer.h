@@ -5,7 +5,6 @@
 #include <grpcpp/channel.h>
 #include <grpcpp/grpcpp.h>
 
-#include <atomic>
 #include <etcd/Client.hpp>
 #include <etcd/Response.hpp>
 #include <memory>
@@ -26,10 +25,7 @@ namespace kcache {
  */
 class Peer {
 public:
-    Peer() = default;
-
-    explicit Peer(const std::string& addr, const std::string& service_name,
-                  std::shared_ptr<etcd::Client> etcd_cli = nullptr);
+    explicit Peer(const std::string& addr);
 
     auto Get(const std::string& group_name, const std::string& key) -> ByteViewOptional;
     bool Set(const std::string& group_name, const std::string& key, ByteView data);
@@ -37,16 +33,13 @@ public:
 
 private:
     std::string addr_;  // addr = ip:port，且 addr 将作为这个节点在一致性哈希环中的 name
-    std::string service_name_;
-
     std::shared_ptr<grpc::Channel> channel_;
-    std::shared_ptr<etcd::Client> etcd_client_;
     std::unique_ptr<pb::KCache::Stub> grpc_client_;
 };
 
 class PeerPicker {
 public:
-    PeerPicker(const std::string& addr, const std::string& service_name);
+    PeerPicker(const std::string& addr, const std::string& service_name, HashConfig cfg = kDefaultConfig);
     ~PeerPicker();
 
     // 选择一个 Peer 节点

@@ -1,5 +1,8 @@
 #include "kcache/peer.h"
 
+#include <memory>
+#include <optional>
+
 #include <fmt/base.h>
 #include <grpcpp/client_context.h>
 #include <grpcpp/create_channel.h>
@@ -7,21 +10,13 @@
 #include <grpcpp/support/status.h>
 #include <spdlog/spdlog.h>
 
-#include <memory>
-#include <optional>
-
 #include "kcache.grpc.pb.h"
 #include "kcache.pb.h"
 #include "kcache/cache.h"
 
 namespace kcache {
 
-Peer::Peer(const std::string& addr, const std::string& service_name, std::shared_ptr<etcd::Client> etcd_cli)
-    : addr_(addr), service_name_(service_name), etcd_client_(etcd_cli) {
-    if (etcd_client_ == nullptr) {
-        etcd_client_ = std::make_unique<etcd::Client>("http://127.0.0.1:2379");
-    }
-
+Peer::Peer(const std::string& addr) : addr_(addr) {
     // gRPC 连接选项
     grpc::ChannelArguments args;
     args.SetInt(GRPC_ARG_INITIAL_RECONNECT_BACKOFF_MS, 100);

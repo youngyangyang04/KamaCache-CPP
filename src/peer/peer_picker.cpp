@@ -1,24 +1,25 @@
-#include <fmt/base.h>
-#include <fmt/core.h>
-#include <spdlog/spdlog.h>
+#include "kcache/peer.h"
 
 #include <cassert>
 #include <cstdio>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+
+#include <fmt/core.h>
+#include <spdlog/spdlog.h>
 #include <etcd/Client.hpp>
 #include <etcd/Response.hpp>
 #include <etcd/Value.hpp>
 #include <etcd/Watcher.hpp>
-#include <memory>
-#include <mutex>
-#include <string>
 
 #include "kcache/consistent_hash.h"
-#include "kcache/peer.h"
 
 namespace kcache {
 
-PeerPicker::PeerPicker(const std::string& addr, const std::string& svc_name)
-    : self_addr_(addr), service_name_(svc_name) {
+PeerPicker::PeerPicker(const std::string& addr, const std::string& svc_name, HashConfig cfg)
+    : self_addr_(addr), service_name_(svc_name), cons_hash_(cfg) {
     etcd_client_ = std::make_shared<etcd::Client>("http://127.0.0.1:2379");
 
     // 启动服务发现
@@ -115,9 +116,9 @@ bool PeerPicker::FetchAllServices() {
 }
 
 void PeerPicker::Set(const std::string& addr) {
-    auto client = std::make_shared<Peer>(addr, service_name_, etcd_client_);
+    auto peer = std::make_shared<Peer>(addr);
     cons_hash_.Add({addr});
-    peers_[addr] = client;
+    peers_[addr] = peer;
 }
 
 void PeerPicker::Remove(const std::string& addr) {
