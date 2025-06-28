@@ -59,7 +59,6 @@ private:
     std::string service_name_;
     std::shared_mutex mtx_;
     std::unordered_map<std::string, std::shared_ptr<Peer>> peers_;  // 节点名称和节点本身的映射
-    std::atomic_bool is_stop_watch_;
     std::shared_ptr<etcd::Client> etcd_client_;
     std::unique_ptr<etcd::Watcher> etcd_watcher_;
     std::thread etcd_watch_thread_;

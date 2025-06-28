@@ -30,7 +30,6 @@ PeerPicker::PeerPicker(const std::string& addr, const std::string& svc_name, Has
 }
 
 PeerPicker::~PeerPicker() {
-    is_stop_watch_ = true;
     etcd_watcher_->Cancel();
     if (etcd_watch_thread_.joinable()) {
         etcd_watch_thread_.join();
@@ -48,6 +47,7 @@ bool PeerPicker::StartServiceDiscovery() {
 
 void PeerPicker::WatchServiceChanges() {
     std::string prefix_key = "/services/" + service_name_ + "/";
+    spdlog::debug("Starting etcd watcher for prefix: {}", prefix_key);
     etcd_watcher_ = std::make_unique<etcd::Watcher>(
         *etcd_client_, prefix_key, [this](etcd::Response resp) { HandleWatchEvents(resp); }, true);
     etcd_watcher_->Wait();
@@ -60,23 +60,24 @@ void PeerPicker::HandleWatchEvents(const etcd::Response& resp) {
         return;
     }
     for (const auto& event : resp.events()) {
-        std::string addr = ParseAddrFromKey(event.kv().as_string());
+        std::string key = event.kv().key();
+        std::string addr = ParseAddrFromKey(key);
         if (addr.empty() || addr == self_addr_) {
             continue;
         }
         switch (event.event_type()) {
             case etcd::Event::EventType::PUT: {
                 Set(addr);
-                spdlog::debug("Service added at {}", addr);
+                spdlog::debug("Service added: {} (key: {})", addr, key);
                 break;
             }
             case etcd::Event::EventType::DELETE_: {
                 Remove(addr);
-                spdlog::debug("Service removed at {}", addr);
+                spdlog::debug("Service removed: {} (key: {})", addr, key);
                 break;
             }
             default:
-                spdlog::debug("Unknown event type: {}", static_cast<int>(event.event_type()));
+                spdlog::debug("Unknown event type: {} for key: {}", static_cast<int>(event.event_type()), key);
                 break;
         }
     }
