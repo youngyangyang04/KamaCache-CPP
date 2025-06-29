@@ -29,9 +29,13 @@ add_custom_command(
 # 将生成的 proto 相关的 cpp 文件构建成一个库
 add_library(kcache_proto STATIC ${PROTO_CPP_FILE} ${PROTO_HDR_FILE}
     ${GRPC_CPP_FILE} ${GRPC_HDR_FILE})
-target_link_libraries(kcache_proto protobuf::libprotobuf grpc::grpc)
+target_link_libraries(kcache_proto PUBLIC protobuf::protobuf grpc::grpc)
 
-#生成 kcache 目标
 file(GLOB_RECURSE KCACHE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-add_library(kcache STATIC ${KCACHE_SRC})
-target_link_libraries(kcache kcache_proto protobuf::protobuf etcd-cpp-apiv3::etcd-cpp-apiv3 fmt::fmt grpc::grpc spdlog::spdlog)
+list(REMOVE_ITEM KCACHE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/http_gateway.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/node.cpp")
+
+# 缓存 node 节点
+add_executable(knode ${KCACHE_SRC} "${CMAKE_CURRENT_SOURCE_DIR}/node.cpp")
+target_link_libraries(knode kcache_proto etcd-cpp-apiv3::etcd-cpp-apiv3
+                      fmt::fmt spdlog::spdlog gflags::gflags)
