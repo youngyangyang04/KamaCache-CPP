@@ -1,20 +1,16 @@
 #ifndef GRPC_SERVER_H_
 #define GRPC_SERVER_H_
 
-// kamacache_server.h
-#include <grpcpp/grpcpp.h>
-
 #include <chrono>
-#include <etcd/Client.hpp>  // Using etcd-cpp-apiv3 client
-#include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
+#include <grpcpp/grpcpp.h>
+#include <etcd/Client.hpp>
+
 #include "kcache.grpc.pb.h"
 #include "kcache.pb.h"
-#include "kcache/group.h"
 #include "kcache/registry.h"
 
 namespace kcache {
@@ -81,9 +77,6 @@ private:
 private:
     std::string addr_;
     std::string svc_name_;
-
-    std::map<std::string, std::shared_ptr<CacheGroup>> groups_;
-    std::mutex groups_mutex_;
 
     std::unique_ptr<grpc::Server> grpc_server_;
     std::unique_ptr<EtcdRegistry> etcd_register_;

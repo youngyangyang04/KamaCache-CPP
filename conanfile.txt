@@ -6,6 +6,8 @@ grpc/1.54.3
 etcd-cpp-apiv3/0.15.4
 fmt/11.1.3
 spdlog/1.15.1
+cpp-httplib/0.20.1
+nlohmann_json/3.12.0
 
 [generators]
 CMakeDeps
