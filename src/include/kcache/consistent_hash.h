@@ -14,6 +14,9 @@
 
 namespace kcache {
 
+// CRC32 IEEE 哈希函数，兼容 Go 的 crc32.ChecksumIEEE
+uint32_t Crc32IEEE(const std::string& data);
+
 // 一致性哈希配置
 struct HashConfig {
     // 每个真实节点对应的虚拟节点数
@@ -30,7 +33,7 @@ struct HashConfig {
 
 // DefaultConfig 默认配置
 const HashConfig kDefaultConfig = {
-    50,   10, 200, std::hash<std::string>{},
+    50,   10, 200, Crc32IEEE,
     0.25,  // 25% 的负载不均衡度触发调整
 };
 
