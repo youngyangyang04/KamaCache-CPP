@@ -1,0 +1,45 @@
+# 构建产物
+build/
+.cache/
+.conan/
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git 文件
+.git/
+.gitignore
+
+# 临时文件
+*.tmp
+*.temp
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 文档文件
+*.md
+!README.md
+*.txt
+!conanfile.txt
+!CMakeLists.txt
+
+# 图片文件
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.tar.bz2
+
+# 其他
+LICENSE
