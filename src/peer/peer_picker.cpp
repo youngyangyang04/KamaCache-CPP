@@ -18,9 +18,10 @@
 
 namespace kcache {
 
-PeerPicker::PeerPicker(const std::string& addr, const std::string& svc_name, HashConfig cfg)
+PeerPicker::PeerPicker(const std::string& addr, const std::string& svc_name, const std::string& etcd_endpoints,
+                       HashConfig cfg)
     : self_addr_(addr), service_name_(svc_name), cons_hash_(cfg) {
-    etcd_client_ = std::make_shared<etcd::Client>("http://127.0.0.1:2379");
+    etcd_client_ = std::make_shared<etcd::Client>(etcd_endpoints);
 
     // 启动服务发现
     if (!StartServiceDiscovery()) {

@@ -39,7 +39,8 @@ private:
 
 class PeerPicker {
 public:
-    PeerPicker(const std::string& addr, const std::string& service_name, HashConfig cfg = kDefaultConfig);
+    PeerPicker(const std::string& addr, const std::string& service_name, const std::string& etcd_endpoints,
+               HashConfig cfg = kDefaultConfig);
     ~PeerPicker();
 
     // 选择一个 Peer 节点

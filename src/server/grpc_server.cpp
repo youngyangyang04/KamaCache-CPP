@@ -12,10 +12,10 @@
 
 namespace kcache {
 
-CacheGrpcServer::CacheGrpcServer(const std::string& addr, const std::string& svc_name)
-    : addr_(addr), svc_name_(svc_name) {
+CacheGrpcServer::CacheGrpcServer(const std::string& addr, const std::string& svc_name, ServerOptions opts)
+    : addr_(addr), svc_name_(svc_name), opts_(opts) {
     // 创建etcd注册器
-    etcd_register_ = std::make_unique<EtcdRegistry>();
+    etcd_register_ = std::make_unique<EtcdRegistry>(opts_.etcd_endpoints[0]);
     if (!etcd_register_->Register(svc_name_, addr_)) {
         throw std::runtime_error("[kcache] Failed to register service with etcd");
     }

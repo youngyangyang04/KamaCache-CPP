@@ -174,7 +174,7 @@ TEST_F(CacheGroupTest, DefaultConstructor) {
 
 TEST_F(CacheGroupTest, RegisterPeerPicker) {
     CacheGroup group("test", 1024, getter_);
-    auto peer_picker = std::make_unique<PeerPicker>("localhost:8001", "test_service");
+    auto peer_picker = std::make_unique<PeerPicker>("localhost:8001", "test_service", "http://127.0.0.1:2379");
 
     group.RegisterPeerPicker(std::move(peer_picker));
 
@@ -184,7 +184,7 @@ TEST_F(CacheGroupTest, RegisterPeerPicker) {
 
 TEST_F(CacheGroupTest, SyncToPeersSet) {
     CacheGroup group("test", 1024, getter_);
-    auto peer_picker = std::make_unique<PeerPicker>("localhost:8001", "test_service");
+    auto peer_picker = std::make_unique<PeerPicker>("localhost:8001", "test_service", "http://127.0.0.1:2379");
 
     group.RegisterPeerPicker(std::move(peer_picker));
 
@@ -197,7 +197,7 @@ TEST_F(CacheGroupTest, SyncToPeersSet) {
 
 TEST_F(CacheGroupTest, SyncToPeersDelete) {
     CacheGroup group("test", 1024, getter_);
-    auto peer_picker = std::make_unique<PeerPicker>("localhost:8001", "test_service");
+    auto peer_picker = std::make_unique<PeerPicker>("localhost:8001", "test_service", "http://127.0.0.1:2379");
 
     group.RegisterPeerPicker(std::move(peer_picker));
 

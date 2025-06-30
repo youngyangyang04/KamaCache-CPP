@@ -20,6 +20,7 @@ using namespace kcache;
 
 DEFINE_int32(port, 8001, "节点端口");
 DEFINE_string(node, "A", "节点标识符");
+DEFINE_string(etcd_endpoints, "http://127.0.0.1:2379", "etcd地址");
 
 // 模拟数据库
 std::unordered_map<std::string, std::string> db = {
@@ -41,13 +42,10 @@ int main(int argc, char** argv) {
     spdlog::info("[node{}] start at: {}", FLAGS_node, addr);
 
     try {
-        // 创建服务器选项
-        ServerOptions opts;
-        opts.etcd_endpoints = {"localhost:2379"};
-        opts.dial_timeout = std::chrono::seconds(5);
-
         // 创建节点，同时注册到etcd
-        auto node = std::make_unique<CacheGrpcServer>(addr, service_name);
+        ServerOptions opts;
+        opts.etcd_endpoints = {FLAGS_etcd_endpoints};
+        auto node = std::make_unique<CacheGrpcServer>(addr, service_name, opts);
         spdlog::info("[node{}] server created successfully", FLAGS_node);
 
         // 启动节点
@@ -87,7 +85,7 @@ int main(int argc, char** argv) {
         });
 
         // 为cache group注册节点选择器
-        group.RegisterPeerPicker(std::make_unique<PeerPicker>(addr, service_name));
+        group.RegisterPeerPicker(std::make_unique<PeerPicker>(addr, service_name, FLAGS_etcd_endpoints));
         spdlog::info("[node{}] peer picker registered successfully", FLAGS_node);
         spdlog::info("[node{}] service running, press Ctrl+C to exit...", FLAGS_node);
 

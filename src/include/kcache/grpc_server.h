@@ -25,7 +25,7 @@ struct ServerOptions {
 
     // Default constructor to set default values
     ServerOptions()
-        : etcd_endpoints({"localhost:2379"}),
+        : etcd_endpoints({"http://127.0.0.1:2379"}),
           dial_timeout(std::chrono::seconds(5)),
           max_msg_size(4 << 20),  // 4MB
           tls(false) {}
@@ -53,7 +53,7 @@ inline auto WithTLS(const std::string& certFile, const std::string& keyFile) -> 
 
 class CacheGrpcServer final : public pb::KCache::Service {
 public:
-    CacheGrpcServer(const std::string& addr, const std::string& svc_name);
+    CacheGrpcServer(const std::string& addr, const std::string& svc_name, ServerOptions opts = ServerOptions{});
     ~CacheGrpcServer() = default;
 
     auto Get(grpc::ServerContext* context, const pb::Request* request, pb::GetResponse* response)
