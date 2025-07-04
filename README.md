@@ -2,8 +2,6 @@
 
 【代码随想录知识星球】项目分享-分布式缓存项目
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kerolt/kcache)
-
 KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据分片，确保负载均衡，采用 LRU（最近最少使用）缓存淘汰算法；使用 gRPC 进行节点间高效通信，并基于 etcd 实现服务注册与发现，实时监控集群状态变化。该项目使用 conan 作为包管理工具，使用 CMake 作为项目的构建工具。
 
 ## 运行环境
@@ -22,6 +20,8 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 - etcd-cpp-apiv3 / 0.15.4
 - fmt / 11.1.3
 - spdlog / 1.15.1
+- cpp-httplib / 0.20.1
+- nlohmann_json / 3.12.0
 
 该项目使用 [conan](https://conan.io/) 作为依赖管理工具，在配置该项目时需确保当前系统上安装了 conan。
 
@@ -84,6 +84,8 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 |   |   `-- registry.cpp
 |   |-- server
 |   |   `-- grpc_server.cpp
+|   |-- http_gateway.cpp
+|   |-- node.cpp
 |   `-- CMakeLists.txt
 |-- test
 |   |-- CMakeLists.txt
@@ -100,9 +102,22 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 `-- README.md
 ```
 
-## 构建和运行
+## 本地运行
 
-### 使用 CMake 构建
+项目中使用的第三方库 `etcd-cpp-apiv3` 中依赖的 `libsystemd/255`，而这个版本的 libsystemd 在高版本的 Linux Kernel 上有一个 bug：
+
+```plain
+Unknown filesystems defined in kernel headers:
+
+Filesystem found in kernel header but not in filesystems-gperf.gperf: BCACHEFS_SUPER_MAGIC
+Filesystem found in kernel header but not in filesystems-gperf.gperf: PID_FS_MAGIC
+```
+
+不过后面这个 bug 修复了，可以看[这里](https://lore.kernel.org/buildroot/ZmGjGvRCN3GwWFhp@landeda/T/)。而我们使用的 Conan 仓库中 etcd-cpp-apiv3 的最新版本还是依赖了 libsystemd/255。
+
+因此如果继续使用 Conan 作为包管理器的话，就需要使用低版本的内核（6.8及以下），这里我使用的是 Ubuntu22.04，内核版本为 5.15，可以使用虚拟机或者 Docker。项目给出了 Dockerfile，能比较方便的构建出镜像，这里在下一章会有说明。
+
+### 项目构建
 
 1. 使用 conan 的 CMake 配置:
 
@@ -120,7 +135,7 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
     # cmake >= 3.23 
     cmake --preset conan-debug
     # cmake < 3.23
-    cmake <path> -G "Ninja" -DCMAKE_TOOLCHAIN_FILE=generators/conan_toolchain.cmake  -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_BUILD_TYPE=Debug
+    cmake -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Debug -S . -B build -G Ninja
     ```
 
     可按照你的需求将命令中的 debug(Debug) 换成 release(Release)
@@ -138,25 +153,122 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 - kcache.pb.cc
 - kcache.pb.h
 
+在 build/bin 目录下会生成可执行程序，其中
+
+- `knode` 为节点实例
+- `kgateway` 为网关服务器
+
+### 启动 etcd
+
+```sh
+docker run -d --name etcd \ 
+        -p 2379:2379 \
+        quay.io/coreos/etcd:v3.5.0 \
+        etcd --advertise-client-urls http://0.0.0.0:2379 \
+        --listen-client-urls http://0.0.0.0:2379
+```
+
 ### 运行
 
-`example/example.cpp` 是一个使用 kcache 的示例代码，当完成项目的构建编译后，将会在 `build/example` 下生成可执行文件 `example`。
-
-分别在三个终端运行以下命令：
+在不同终端启动：
 
 ```sh
-# 节点 A
-./build/example/example --port=8001 --node=A
+./build/bin/knode --port=8001 --node=A
+./build/bin/knode --port=8002 --node=B
+./build/bin/knode --port=8003 --node=C
+
+./build/bin/kgateway
 ```
 
-```sh
-# 节点 B
-./build/example/example --port=8002 --node=B
-```
+## Docker 运行
+
+### 构建镜像  
 
 ```sh
-# 节点 C
-./build/example/example --port=8003 --node=C
+docker build -t kcache:latest .  
+```
+
+> PS：如果构建时间长或者失败，可以考虑使用本地网络和代理：  
+> `docker build --network host --build-arg HTTP_PROXY=http://your-proxy:port --build-arg HTTPS_PROXY=http://your-proxy:port -t kcache:latest .`
+
+构建镜像时需要安装依赖，编译第三方库，可以喝杯☕慢慢等待~
+
+### 单节点运行  
+
+**启动 etcd**： 
+
+可以使用 Go 版本文档中 etcd 的启动方式：  
+
+```sh
+docker run -d --name etcd   
+  -p 2379:2379   
+  quay.io/coreos/etcd:v3.5.0   
+  etcd --advertise-client-urls http://0.0.0.0:2379   
+  --listen-client-urls http://0.0.0.0:2379  
+```
+
+也可以在自己电脑上安装 etcd 来启动。  
+
+**启动一个 kcache node**：
+
+```sh
+docker run -d   
+  --name kcache-node   
+  -p 8001:8001   
+  --network host   
+  kcache:latest   
+  /app/bin/knode --port=8001 --node=A
+```
+
+### 多节点集群  
+
+使用 Docker Compose 一键启动集群：  
+
+```sh
+# 启动整个集群（包含 etcd + 3个节点 + 网关）  
+docker compose up -d  
+```
+
+可以通过 ps 查看服务状态， log 命令查看节点和网关的日志：  
+
+```sh
+# 查看服务状态  
+docker compose ps  
+
+# 查看日志  
+docker compose logs -f  
+```
+
+结束任务，删除容器：  
+
+```sh
+# 停止服务  
+docker compose down  
+```
+
+## 使用 curl 访问服务  
+
+启动服务后，可以通过本机的 9000 端口来访问服务：  
+
+1. Get  
+
+```sh
+curl http://127.0.0.1:9000/api/cache/test/Kerolt  
+# 输出：{"group":"test","key":"Kerolt","value":"370"}⏎  
+```
+
+2. Set  
+
+```sh
+$ curl -X POST http://127.0.0.1:9000/api/cache/test/Kerolt -d 'value=1219'     
+# 输出：{"group":"test","key":"Kerolt","success":true,"value":"value=1219"}⏎  
+```
+
+3. Delete
+
+```sh
+$ curl -X DELETE http://localhost:9000/api/cache/test/Kerolt  
+# 输出：{"deleted":true,"group":"test","key":"Kerolt"}⏎  
 ```
 
 ## 核心组件
@@ -167,7 +279,6 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 
 - 提供线程安全的缓存访问
 - 管理统计信息（命中、未命中）
-- 处理缓存过期
 
 ### Group 缓存组
 
@@ -199,6 +310,10 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 ### 服务注册与发现
 
 项目使用 etcd 进行服务发现。每个节点启动时向 etcd 注册自己（通过 gRPC Server），同时节点通过监听 etcd 变化发现可用的 peer 节点。
+
+### 网关服务
+
+HTTP 网关通过 etcd 自动发现可用的缓存节点，并通过 gRPC 与它们通信，为外部客户端提供标准的REST API接口
 
 ## 许可证
 
