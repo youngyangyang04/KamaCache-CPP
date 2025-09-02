@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include "kcache.pb.h"
 #include "kcache/group.h"
 
 namespace kcache {
@@ -58,6 +59,18 @@ auto CacheGrpcServer::Delete(grpc::ServerContext* context, const pb::Request* re
     bool is_from_peer = !is_gateway;
     bool is_delete = group->Delete(request->key(), is_from_peer);
     response->set_value(is_delete);
+    return grpc::Status::OK;
+}
+
+auto CacheGrpcServer::Invalidate(grpc::ServerContext* context, const pb::Request* request,
+                                 pb::InvalidateResponse* response) -> grpc::Status {
+    auto group = GetCacheGroup(request->group());
+    if (!group) {
+        return grpc::Status(grpc::StatusCode::NOT_FOUND, "Group not found");
+    }
+    // Invalidate RPC 调用总是来自其他节点，调用 InvalidateFromPeer 避免循环传播
+    bool is_invalidate = group->InvalidateFromPeer(request->key());
+    response->set_value(is_invalidate);
     return grpc::Status::OK;
 }
 

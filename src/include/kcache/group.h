@@ -30,6 +30,7 @@ struct GroupStatus {
 enum class SyncFlag {
     SET,
     DELETE,
+    INVALIDATE,  // 缓存失效，只删除本地缓存，不通过getter重新加载
 };
 
 class CacheGroup {
@@ -61,6 +62,12 @@ public:
     bool Set(const std::string& key, ByteView b, bool is_from_peer = false);
 
     bool Delete(const std::string& key, bool is_from_peer = false);
+
+    // 处理来自其他节点的失效请求
+    bool InvalidateFromPeer(const std::string& key);
+
+    // 自身主动处理失效缓存
+    bool Invalidate(const std::string& key);
 
     void SyncToPeers(const std::string& key, SyncFlag op, ByteView value);
 

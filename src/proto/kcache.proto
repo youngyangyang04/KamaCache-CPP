@@ -20,8 +20,13 @@ message SetResponse {
     bool value = 1;
 }
 
+message InvalidateResponse {
+    bool value = 1;
+}
+
 service KCache {
     rpc Get(Request) returns (GetResponse);
     rpc Set(Request) returns (SetResponse);
     rpc Delete(Request) returns (DeleteResponse);
+    rpc Invalidate(Request) returns (InvalidateResponse);
 }

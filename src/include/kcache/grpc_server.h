@@ -65,6 +65,9 @@ public:
     auto Delete(grpc::ServerContext* context, const pb::Request* request, pb::DeleteResponse* response)
         -> grpc::Status override;
 
+    auto Invalidate(grpc::ServerContext* context, const pb::Request* request, pb::InvalidateResponse* response)
+        -> grpc::Status override;
+
     void Start();
 
     void Stop();

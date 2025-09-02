@@ -91,4 +91,23 @@ bool Peer::Delete(const std::string& group_name, const std::string& key) {
     return true;
 }
 
+bool Peer::Invalidate(const std::string& group_name, const std::string& key) {
+    grpc::ClientContext context;
+    auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(3);
+    context.set_deadline(deadline);
+
+    pb::Request request;
+    request.set_group(group_name);
+    request.set_key(key);
+
+    pb::InvalidateResponse response;
+    grpc::Status status = grpc_client_->Invalidate(&context, request, &response);
+
+    if (!status.ok()) {
+        spdlog::error("Failed to invalidate key from kcache: {}", status.error_message());
+        return false;
+    }
+    return true;
+}
+
 }  // namespace kcache

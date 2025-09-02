@@ -30,6 +30,7 @@ public:
     auto Get(const std::string& group_name, const std::string& key) -> ByteViewOptional;
     bool Set(const std::string& group_name, const std::string& key, ByteView data);
     bool Delete(const std::string& group_name, const std::string& key);
+    bool Invalidate(const std::string& group_name, const std::string& key);
 
 private:
     std::string addr_;  // addr = ip:port，且 addr 将作为这个节点在一致性哈希环中的 name
@@ -45,6 +46,9 @@ public:
 
     // 选择一个 Peer 节点
     auto PickPeer(const std::string& key) -> Peer*;
+
+    // 获取所有节点（用于广播）
+    auto GetAllPeers() -> std::vector<Peer*>;
 
 private:
     bool StartServiceDiscovery();

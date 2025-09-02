@@ -94,6 +94,17 @@ auto PeerPicker::PickPeer(const std::string& key) -> Peer* {
     return nullptr;
 }
 
+auto PeerPicker::GetAllPeers() -> std::vector<Peer*> {
+    std::lock_guard lock{mtx_};
+    std::vector<Peer*> all_peers;
+    for (const auto& [addr, peer] : peers_) {
+        if (addr != self_addr_) {  // 排除自己
+            all_peers.push_back(peer.get());
+        }
+    }
+    return all_peers;
+}
+
 bool PeerPicker::FetchAllServices() {
     std::string prefix_key = "/services/" + service_name_ + "/";
     etcd::Response resp = etcd_client_->ls(prefix_key).get();  // 列出指定前缀下的所有键​​

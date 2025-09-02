@@ -93,30 +93,102 @@ bool CacheGroup::Delete(const std::string& key, bool is_from_peer) {
     return true;
 }
 
+bool CacheGroup::Invalidate(const std::string& key) {
+    if (is_close_) {
+        spdlog::error("Cache group [{}] is closed!!!", name_);
+        return false;
+    }
+    if (key.empty()) {
+        spdlog::warn("The key [{}] is empty, you can't invalidate it from cache group", key);
+        return false;
+    }
+
+    // 主动失效：删除本地缓存并通知其他节点
+    cache_->Delete(key);
+    spdlog::debug("Invalidated key [{}] from local cache", key);
+
+    // 通知其他节点也失效这个key
+    if (peer_picker_) {
+        SyncToPeers(key, SyncFlag::INVALIDATE, ByteView{""});
+    }
+
+    return true;
+}
+
+bool CacheGroup::InvalidateFromPeer(const std::string& key) {
+    if (is_close_) {
+        spdlog::error("Cache group [{}] is closed!!!", name_);
+        return false;
+    }
+    if (key.empty()) {
+        spdlog::warn("The key [{}] is empty, you can't invalidate it from cache group", key);
+        return false;
+    }
+
+    // 来自其他节点的失效请求，删除本地缓存
+    cache_->Delete(key);
+    spdlog::debug("Invalidated key [{}] from local cache (from peer)", key);
+    return true;
+}
+
 void CacheGroup::SyncToPeers(const std::string& key, SyncFlag op, ByteView value) {
     if (!peer_picker_) {
         return;
     }
 
-    auto peer = peer_picker_->PickPeer(key);
-    if (!peer) {
-        return;
-    }
-
-    bool ok = true;
     switch (op) {
-        case SyncFlag::SET:
-            ok = peer->Set(name_, key, value);
-            break;
-        case SyncFlag::DELETE:
-            ok = peer->Delete(name_, key);
-            break;
-        default:
-            return;
-    }
+        case SyncFlag::SET: {
+            // 对于 SET 操作，实现最终一致性：
+            // 1. 将数据同步到管理该 key 的节点
+            auto primary_peer = peer_picker_->PickPeer(key);
+            if (primary_peer) {
+                bool ok = primary_peer->Set(name_, key, value);
+                if (!ok) {
+                    spdlog::warn("Failed to sync SET to primary peer for key: {}", key);
+                }
+            }
 
-    if (!ok) {
-        spdlog::warn("Failed to sync to peer");
+            // 2. 向所有其他节点（除了主节点）发送失效通知，保证最终一致性
+            auto all_peers = peer_picker_->GetAllPeers();
+            for (auto peer : all_peers) {
+                if (peer != primary_peer) {  // 排除已经同步过的主节点
+                    bool ok = peer->Invalidate(name_, key);
+                    if (!ok) {
+                        spdlog::warn("Failed to invalidate key [{}] on peer", key);
+                    }
+                }
+            }
+            spdlog::debug("SET operation synced: key [{}] set on primary node, invalidated on {} other nodes", key,
+                          all_peers.size() - (primary_peer ? 1 : 0));
+            break;
+        }
+        case SyncFlag::DELETE: {
+            // 对于 DELETE 操作，需要广播到所有节点
+            auto all_peers = peer_picker_->GetAllPeers();
+            for (auto peer : all_peers) {
+                bool ok = peer->Delete(name_, key);
+                if (!ok) {
+                    spdlog::warn("Failed to sync DELETE to peer for key: {}", key);
+                }
+            }
+            spdlog::debug("DELETE operation synced: key [{}] deleted on {} nodes", key, all_peers.size());
+            break;
+        }
+        case SyncFlag::INVALIDATE: {
+            // 向所有其他节点发送失效通知
+            auto all_peers = peer_picker_->GetAllPeers();
+            for (auto peer : all_peers) {
+                bool ok = peer->Invalidate(name_, key);
+                if (!ok) {
+                    spdlog::warn("Failed to invalidate key [{}] on peer", key);
+                }
+            }
+            spdlog::debug("INVALIDATE operation synced: key [{}] invalidated on {} nodes", key, all_peers.size());
+            break;
+        }
+        default:
+            spdlog::warn("Unknown sync operation: {}", static_cast<int>(op));
+            return;
     }
 }
 
