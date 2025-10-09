@@ -1,6 +1,6 @@
-# KamaCache-CPP
+# KCache
 
-【代码随想录知识星球】项目分享-分布式缓存项目
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kerolt/kcache)
 
 KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据分片，确保负载均衡，采用 LRU（最近最少使用）缓存淘汰算法；使用 gRPC 进行节点间高效通信，并基于 etcd 实现服务注册与发现，实时监控集群状态变化。该项目使用 conan 作为包管理工具，使用 CMake 作为项目的构建工具。
 
