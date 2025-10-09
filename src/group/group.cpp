@@ -221,14 +221,13 @@ auto CacheGroup::LoadData(const std::string& key) -> ByteViewOptional {
             }
             ++status_.peer_misses;
         } else {
-            spdlog::warn("Failed to get from peer");
+            spdlog::info("Try to load key [{}] from local", key);
         }
     }
 
     // 通过getter从数据源获取
     auto val = getter_(key);
     if (!val) {
-        spdlog::error("Failed to get [{}] from data source", key);
         return std::nullopt;
     }
     ++status_.local_hits;

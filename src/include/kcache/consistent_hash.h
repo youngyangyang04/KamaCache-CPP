@@ -33,7 +33,7 @@ struct HashConfig {
 
 // DefaultConfig 默认配置
 const HashConfig kDefaultConfig = {
-    50,   10, 200, Crc32IEEE,
+    10,   10, 200, Crc32IEEE,
     0.25,  // 25% 的负载不均衡度触发调整
 };
 
@@ -79,9 +79,9 @@ private:
     HashConfig config_;
 
     // 哈希环
-    std::vector<int> keys_;
+    std::vector<uint32_t> keys_;
     // 哈希环到节点的映射
-    std::unordered_map<int, std::string> hash_map_;
+    std::unordered_map<uint32_t, std::string> hash_map_;
     // 节点到虚拟节点数量的映射
     std::unordered_map<std::string, int> node_replicas_;
     // 节点负载统计

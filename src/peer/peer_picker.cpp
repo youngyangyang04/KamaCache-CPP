@@ -68,13 +68,17 @@ void PeerPicker::HandleWatchEvents(const etcd::Response& resp) {
         }
         switch (event.event_type()) {
             case etcd::Event::EventType::PUT: {
-                Set(addr);
-                spdlog::debug("Service added: {} (key: {})", addr, key);
+                if (peers_.find(addr) == peers_.end()) {
+                    Set(addr);
+                    spdlog::debug("Service added: {} (key: {})", addr, key);
+                }
                 break;
             }
             case etcd::Event::EventType::DELETE_: {
-                Remove(addr);
-                spdlog::debug("Service removed: {} (key: {})", addr, key);
+                if (peers_.find(addr) != peers_.end()) {
+                    Remove(addr);
+                    spdlog::debug("Service removed: {} (key: {})", addr, key);
+                }
                 break;
             }
             default:
@@ -120,7 +124,7 @@ bool PeerPicker::FetchAllServices() {
     std::unique_lock lock{mtx_};
     for (const auto& key : resp.keys()) {
         std::string addr = ParseAddrFromKey(key);
-        if (!addr.empty() && addr != self_addr_) {
+        if (!addr.empty()) {
             Set(addr);
             spdlog::debug("Discovered service at {}", addr);
         }

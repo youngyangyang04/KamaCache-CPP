@@ -4,6 +4,7 @@
 
 #include <fmt/base.h>
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 namespace kcache {
 
@@ -96,7 +97,7 @@ bool ConsistentHashMap::Remove(const std::string& node) {
     // 移除节点的所有虚拟节点
     for (int i = 0; i < replicas; ++i) {
         std::string hash_key = fmt::format("{}-{}", node, std::to_string(i));
-        int hash = static_cast<int>(config_.hash_func(hash_key));
+        uint32_t hash = config_.hash_func(hash_key);
         hash_map_.erase(hash);  // 从哈希映射中移除
         // 从哈希环中移除哈希值
         auto it = std::remove(keys_.begin(), keys_.end(), hash);
@@ -119,7 +120,7 @@ auto ConsistentHashMap::Get(const std::string& key) -> std::string {
         return "";
     }
 
-    int hash = static_cast<int>(config_.hash_func(key));
+    uint32_t hash = config_.hash_func(key);
     // 二分查找：找到第一个大于等于 hash 的位置
     auto it = std::lower_bound(keys_.begin(), keys_.end(), hash);
 
@@ -166,10 +167,8 @@ void ConsistentHashMap::StartBalancer() {
 void ConsistentHashMap::AddNode(const std::string& node, int replicas) {
     for (int i = 0; i < replicas; ++i) {
         std::string hash_key = fmt::format("{}-{}", node, std::to_string(i));
-        int hash = static_cast<int>(config_.hash_func(hash_key));
-        if (hash_map_.find(hash) != hash_map_.end()) {
-            continue;
-        }
+        spdlog::debug("Adding virtual node: {} with hash key: {}", node, hash_key);
+        uint32_t hash = config_.hash_func(hash_key);
         keys_.push_back(hash);
         hash_map_[hash] = node;
     }
@@ -268,7 +267,7 @@ void ConsistentHashMap::RebalanceNodes() {
             int replicas_to_remove = node_replicas_[node];
             for (int i = 0; i < replicas_to_remove; ++i) {
                 std::string hashKey = node + "-" + std::to_string(i);
-                int hash = static_cast<int>(config_.hash_func(hashKey));
+                uint32_t hash = config_.hash_func(hashKey);
                 hash_map_.erase(hash);
                 auto it = std::remove(keys_.begin(), keys_.end(), hash);
                 keys_.erase(it, keys_.end());
