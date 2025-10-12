@@ -69,10 +69,13 @@ bool CacheGroup::Set(const std::string& key, ByteView b, bool is_from_peer) {
         return false;
     }
     cache_->Set(key, b);
-    // 必须是本身这个节点设置的值，才会同步到其他节点
-    if (!is_from_peer && peer_picker_) {
-        SyncToPeers(key, SyncFlag::SET, b);
-    }
+    spdlog::debug("key:{} is set value:{}",key,b.ToString());
+    //必须是本身这个节点设置的值，才会同步到其他节点
+    // if (!is_from_peer && peer_picker_) {
+    //     SyncToPeers(key, SyncFlag::SET, b);
+    // }
+
+
     return true;
 }
 
@@ -86,10 +89,11 @@ bool CacheGroup::Delete(const std::string& key, bool is_from_peer) {
         return false;
     }
     cache_->Delete(key);
-    // 必须是本身这个节点设置的值，才会同步到其他节点
-    if (!is_from_peer && peer_picker_) {
-        SyncToPeers(key, SyncFlag::DELETE, ByteView{""});
-    }
+    spdlog::debug("key:{} is deleted",key);
+    // 必须是本身这个节点设置的值，才会同步到其他节点，如果是其他节点器发来的请求，不管，不然就会造成无限递归
+    // if (!is_from_peer && peer_picker_) {
+    //     SyncToPeers(key, SyncFlag::DELETE, ByteView{""});
+    // }
     return true;
 }
 
@@ -108,9 +112,9 @@ bool CacheGroup::Invalidate(const std::string& key) {
     spdlog::debug("Invalidated key [{}] from local cache", key);
 
     // 通知其他节点也失效这个key
-    if (peer_picker_) {
-        SyncToPeers(key, SyncFlag::INVALIDATE, ByteView{""});
-    }
+    // if (peer_picker_) {
+    //     SyncToPeers(key, SyncFlag::INVALIDATE, ByteView{""});
+    // }
 
     return true;
 }
@@ -211,20 +215,22 @@ auto CacheGroup::Load(const std::string& key) -> ByteViewOptional {
 }
 
 auto CacheGroup::LoadData(const std::string& key) -> ByteViewOptional {
+    /*删除这一部分*/
     // 先尝试从远程节点获取
-    if (peer_picker_ != nullptr) {
-        if (auto peer = peer_picker_->PickPeer(key); peer) {
-            auto val = LoadFromPeer(peer, key);
-            if (val) {
-                ++status_.peer_hits;
-                return val;
-            }
-            ++status_.peer_misses;
-        } else {
-            spdlog::info("Try to load key [{}] from local", key);
-        }
-    }
+    // if (peer_picker_ != nullptr) {
+    //     if (auto peer = peer_picker_->PickPeer(key); peer) {
+    //         auto val = LoadFromPeer(peer, key);
+    //         if (val) {
+    //             ++status_.peer_hits;
+    //             return val;
+    //         }
+    //         ++status_.peer_misses;
+    //     } else {
+            
+    //     }
+    // }
 
+    spdlog::info("Try to load key [{}] from local", key);
     // 通过getter从数据源获取
     auto val = getter_(key);
     if (!val) {
