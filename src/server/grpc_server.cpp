@@ -42,9 +42,7 @@ auto CacheGrpcServer::Set(grpc::ServerContext* context, const pb::Request* reque
     if (!group) {
         return grpc::Status(grpc::StatusCode::NOT_FOUND, "Group not found");
     }
-    bool is_gateway = context->client_metadata().find("is_gateway") != context->client_metadata().end();
-    bool is_from_peer = !is_gateway;
-    bool is_set = group->Set(request->key(), request->value(), is_from_peer);
+    bool is_set = group->Set(request->key(), request->value());
     response->set_value(is_set);
     return grpc::Status::OK;
 }
@@ -55,9 +53,7 @@ auto CacheGrpcServer::Delete(grpc::ServerContext* context, const pb::Request* re
     if (!group) {
         return grpc::Status(grpc::StatusCode::NOT_FOUND, "Group not found");
     }
-    bool is_gateway = context->client_metadata().find("is_gateway") != context->client_metadata().end();
-    bool is_from_peer = !is_gateway;
-    bool is_delete = group->Delete(request->key(), is_from_peer);
+    bool is_delete = group->Delete(request->key());
     response->set_value(is_delete);
     return grpc::Status::OK;
 }

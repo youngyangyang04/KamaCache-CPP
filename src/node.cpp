@@ -14,8 +14,6 @@
 #include "kcache/cache.h"
 #include "kcache/group.h"
 #include "kcache/grpc_server.h"
-#include "kcache/peer.h"
-#include "mysql_connection.h"
 
 using namespace kcache;
 
@@ -25,10 +23,8 @@ DEFINE_string(etcd_endpoints, "http://127.0.0.1:2379", "etcd地址");
 
 // 模拟数据库
 std::unordered_map<std::string, std::string> db = {
-    {"Tom", "400"}, {"Herolt", "370"},  {"Jack", "296"},  {"Alice", "320"},
-    {"Bob", "280"}, {"Charlie", "410"}, {"Diana", "390"}, {"Eve", "310"},
-    {"abcde","789"},{"hello","879"}
-};
+    {"Tom", "400"},     {"Kerolt", "370"}, {"Jack", "296"}, {"Alice", "320"}, {"Bob", "280"},
+    {"Charlie", "410"}, {"Diana", "390"},  {"Eve", "310"},  {"abcde", "789"}, {"hello", "879"}};
 
 std::function<void(int)> handler_wrapper;
 void HandleCtrlC(int signum) { handler_wrapper(signum); }
@@ -85,10 +81,6 @@ int main(int argc, char** argv) {
             spdlog::info(">_< Uh oh, there is not found [{}]\n", key);
             return std::nullopt;
         });
-
-        // 为cache group注册节点选择器
-        // group.RegisterPeerPicker(std::make_unique<PeerPicker>(addr, service_name, FLAGS_etcd_endpoints));
-        // spdlog::info("[node{}] peer picker registered successfully", FLAGS_node);
 
         spdlog::info("[node{}] service running, press Ctrl+C to exit...", FLAGS_node);
 

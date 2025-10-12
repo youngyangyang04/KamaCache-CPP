@@ -59,19 +59,12 @@ public:
 
     auto Get(const std::string& key) -> ByteViewOptional;
 
-    bool Set(const std::string& key, ByteView b, bool is_from_peer = false);
+    bool Set(const std::string& key, ByteView b);
 
-    bool Delete(const std::string& key, bool is_from_peer = false);
+    bool Delete(const std::string& key);
 
     // 处理来自其他节点的失效请求
     bool InvalidateFromPeer(const std::string& key);
-
-    // 自身主动处理失效缓存
-    bool Invalidate(const std::string& key);
-
-    void SyncToPeers(const std::string& key, SyncFlag op, ByteView value);
-
-    void RegisterPeerPicker(std::unique_ptr<PeerPicker>&& peer_picker);
 
 private:
     auto Load(const std::string& key) -> ByteViewOptional;

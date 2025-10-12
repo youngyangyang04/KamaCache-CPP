@@ -1,13 +1,15 @@
+#include <string>
+#include <thread>
+#include <unordered_set>
+
 #include <gflags/gflags.h>
 #include <grpcpp/grpcpp.h>
 #include <httplib.h>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 #include <etcd/Client.hpp>
-#include <etcd/Watcher.hpp> 
+#include <etcd/Watcher.hpp>
 #include <nlohmann/json.hpp>
-#include <string>
-#include <thread>
 
 #include "kcache.grpc.pb.h"
 #include "kcache/consistent_hash.h"
@@ -29,6 +31,10 @@ public:
     }
 
     ~HttpGateway() {
+        // 先取消watcher，避免阻塞在 Wait()
+        if (etcd_watcher_) {
+            etcd_watcher_->Cancel();
+        }
         if (discovery_thread_.joinable()) {
             discovery_thread_.join();
         }
@@ -59,10 +65,14 @@ private:
         std::string group = req.matches[1];
         std::string key = req.matches[2];
 
-        auto target_addr = GetCachenode(key);
+        auto target_addr = GetCacheNode(key);
+        if (target_addr.empty()) {
+            SendError(res, 503, "No cache service available");
+            return;
+        }
+
         auto channel = grpc::CreateChannel(target_addr, grpc::InsecureChannelCredentials());
         auto client = pb::KCache::NewStub(channel);
-
         if (!client) {
             SendError(res, 503, "No cache service available");
             return;
@@ -78,7 +88,7 @@ private:
         auto status = client->Get(&context, request, &response);
         if (status.ok()) {
             nlohmann::json json_resp = {{"key", key}, {"value", response.value()}, {"group", group}};
-            res.set_content(json_resp.dump()+"\n", "application/json");
+            res.set_content(json_resp.dump() + "\n", "application/json");
         } else {
             SendError(res, 404, "Key not found");
         }
@@ -88,10 +98,14 @@ private:
         std::string group = req.matches[1];
         std::string key = req.matches[2];
 
-        auto target_addr = GetCachenode(key);
+        auto target_addr = GetCacheNode(key);
+        if (target_addr.empty()) {
+            SendError(res, 503, "No cache service available");
+            return;
+        }
+
         auto channel = grpc::CreateChannel(target_addr, grpc::InsecureChannelCredentials());
         auto client = pb::KCache::NewStub(channel);
-
         if (!client) {
             SendError(res, 503, "No cache service available");
             return;
@@ -110,7 +124,6 @@ private:
             return;
         }
 
-        
         pb::Request request;
         request.set_group(group);
         request.set_key(key);
@@ -119,14 +132,13 @@ private:
         //发送修改节点通知
         pb::SetResponse response;
         grpc::ClientContext context;
-        context.AddMetadata("is_gateway", "true");
         auto status = client->Set(&context, request, &response);
         if (!(status.ok() && response.value())) {
             spdlog::error("Failed to set value on node {}", target_addr);
             return;
         }
 
-        //广播其他节点发送缓存失效通知
+        // 广播其他节点发送缓存失效通知
         bool all_success = true;
         {
             std::lock_guard<std::mutex> lock(nodes_mutex_);
@@ -135,39 +147,28 @@ private:
                 return;
             }
 
-            for (const auto& addr : cache_nodes_){
-                if(addr!=target_addr){
+            for (const auto& addr : cache_nodes_) {
+                if (addr != target_addr) {
                     auto channel = grpc::CreateChannel(addr, grpc::InsecureChannelCredentials());
                     auto client = pb::KCache::NewStub(channel);
                     pb::InvalidateResponse response;
-                    grpc::ClientContext ctx; // 新建一个 context
-                    ctx.AddMetadata("is_gateway", "true");
+                    grpc::ClientContext ctx;
+
                     auto status = client->Invalidate(&ctx, request, &response);
                     if (!(status.ok() && response.value())) {
                         all_success = false;
                         spdlog::warn("Failed to Invalidate key on node {}", addr);
-                    }    
+                    }
                 }
             }
-
         }
 
         if (all_success) {
             nlohmann::json json_resp = {{"key", key}, {"value", value}, {"group", group}, {"success", true}};
-            res.set_content(json_resp.dump()+"\n", "application/json");
+            res.set_content(json_resp.dump() + "\n", "application/json");
         } else {
             SendError(res, 500, "Failed to Invalidate value on some nodes");
         }
-
-
-        // auto status = client->Set(&context, request, &response);
-        // if (status.ok() && response.value()) {
-        //     nlohmann::json json_resp = {
-        //         {"key", key}, {"value", value}, {"group", group}, {"success", response.value()}};
-        //     res.set_content(json_resp.dump(), "application/json");
-        // } else {
-        //     SendError(res, 500, "Failed to set value");
-        // }
     }
 
     void HandleDelete(const httplib::Request& req, httplib::Response& res) {
@@ -179,7 +180,6 @@ private:
         request.set_key(key);
 
         grpc::ClientContext context;
-        context.AddMetadata("is_gateway", "true");
 
         bool all_success = true;
         {
@@ -188,13 +188,13 @@ private:
                 SendError(res, 503, "No cache service available");
                 return;
             }
-            
+
             for (const auto& addr : cache_nodes_) {
                 auto channel = grpc::CreateChannel(addr, grpc::InsecureChannelCredentials());
                 auto client = pb::KCache::NewStub(channel);
-                grpc::ClientContext ctx; // 新建一个 context
-                ctx.AddMetadata("is_gateway", "true");
+                grpc::ClientContext ctx;
                 pb::DeleteResponse response;
+
                 auto status = client->Delete(&ctx, request, &response);
                 if (!(status.ok() && response.value())) {
                     all_success = false;
@@ -205,14 +205,14 @@ private:
 
         if (all_success) {
             nlohmann::json json_resp = {{"key", key}, {"group", group}, {"deleted", true}};
-            res.set_content(json_resp.dump()+"\n", "application/json");
+            res.set_content(json_resp.dump() + "\n", "application/json");
         } else {
             SendError(res, 500, "Failed to delete key on some nodes");
         }
     }
 
     bool StartServiceDiscovery() {
-        if (!FetchAllServices()){
+        if (!FetchAllServices()) {
             return false;
         }
         discovery_thread_ = std::thread{[this] {
@@ -224,6 +224,7 @@ private:
         }};
         return true;
     }
+
     void HandleWatchEvents(const etcd::Response& resp) {
         std::lock_guard<std::mutex> lock{nodes_mutex_};
         if (!resp.is_ok()) {
@@ -261,10 +262,10 @@ private:
         }
     }
 
-    bool FetchAllServices(){
+    bool FetchAllServices() {
         std::string prefix_key = "/services/" + service_name_ + "/";
         etcd::Response resp = etcd_client_->ls(prefix_key).get();  // 列出指定前缀下的所有键​​
-        
+
         if (!resp.is_ok()) {
             spdlog::error("Failed to get all services from etcd now: {}", resp.error_message());
             return false;
@@ -280,6 +281,7 @@ private:
         }
         return true;
     }
+
     auto ParseAddrFromKey(const std::string& key) -> std::string {
         std::string prefix = "/services/" + service_name_ + "/";
         if (key.rfind(prefix, 0) == 0) {  // 检查是否以 prefix 开头
@@ -287,10 +289,11 @@ private:
         }
         return "";
     }
-    auto GetCachenode(const std::string& key) -> std::string {
+
+    auto GetCacheNode(const std::string& key) -> std::string {
         std::lock_guard<std::mutex> lock(nodes_mutex_);
         if (cache_nodes_.empty()) {
-            return nullptr;
+            return "";
         }
 
         // 使用一致性哈希选择节点
@@ -298,7 +301,6 @@ private:
         if (target_addr.empty()) {
             // 如果一致性哈希没有返回节点，选取第一个
             target_addr = *cache_nodes_.begin();
-            // current_node_index_++;
         }
 
         spdlog::debug("Routing key '{}' to node '{}'", key, target_addr);
