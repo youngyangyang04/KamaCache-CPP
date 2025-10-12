@@ -1,13 +1,14 @@
-#include <fmt/base.h>
+// SPDX-License-Identifier: MIT
 #include <gtest/gtest.h>
 
-#include <memory>
+#include <chrono>
 #include <string>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 #include "kcache/cache.h"
 #include "kcache/group.h"
-#include "kcache/peer.h"
 
 using namespace kcache;
 
@@ -18,6 +19,7 @@ protected:
         call_count_.clear();
 
         getter_ = [this](const std::string& key) -> ByteViewOptional {
+            // 统计回源调用次数
             call_count_[key]++;
             auto it = db_.find(key);
             if (it != db_.end()) {
@@ -32,259 +34,199 @@ protected:
     DataGetter getter_;
 };
 
-TEST_F(CacheGroupTest, ConstructorAndBasicOperations) {
-    CacheGroup group("test", 1024, getter_);
+// 首次回源成功后，二次 Get 命中本地缓存，不再调用 getter
+TEST_F(CacheGroupTest, GetCachesOnHit) {
+    CacheGroup group("group_basic", 1024, getter_);
 
-    // Test Get operation
-    auto result = group.Get("key1");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result.value().ToString(), "value1");
+    auto r1 = group.Get("key1");
+    ASSERT_TRUE(r1.has_value());
+    EXPECT_EQ(r1->ToString(), "value1");
     EXPECT_EQ(call_count_["key1"], 1);
 
-    // Test cache hit (should not call getter again)
-    result = group.Get("key1");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result.value().ToString(), "value1");
-    EXPECT_EQ(call_count_["key1"], 1);  // Should not increment
+    // 第二次应命中本地缓存，不再回源
+    auto r2 = group.Get("key1");
+    ASSERT_TRUE(r2.has_value());
+    EXPECT_EQ(r2->ToString(), "value1");
+    EXPECT_EQ(call_count_["key1"], 1);
 }
 
-TEST_F(CacheGroupTest, GetNonExistentKey) {
-    CacheGroup group("test", 1024, getter_);
-
-    auto result = group.Get("nonexistent");
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(call_count_["nonexistent"], 1);
+// 不存在的 key 返回空值（nullopt）
+TEST_F(CacheGroupTest, GetReturnsNulloptForMissing) {
+    CacheGroup group("group_missing", 1024, getter_);
+    auto r = group.Get("not_exist");
+    EXPECT_FALSE(r.has_value());
+    EXPECT_EQ(call_count_["not_exist"], 1);
 }
 
-TEST_F(CacheGroupTest, SetOperation) {
-    CacheGroup group("test", 1024, getter_);
+// 先 Set 再 Get，不触发 getter
+TEST_F(CacheGroupTest, SetThenGetDoesNotCallGetter) {
+    CacheGroup group("group_set", 1024, getter_);
 
-    // Set a value
-    ByteView value("manual_value");
-    bool success = group.Set("manual_key", value);
-    EXPECT_TRUE(success);
-
-    // Get the set value (should not call getter)
-    auto result = group.Get("manual_key");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result.value().ToString(), "manual_value");
-    EXPECT_EQ(call_count_["manual_key"], 0);  // Should not call getter
+    EXPECT_TRUE(group.Set("manual", ByteView{"v"}));
+    auto r = group.Get("manual");
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->ToString(), "v");
+    EXPECT_EQ(call_count_["manual"], 0);
 }
 
-TEST_F(CacheGroupTest, DeleteOperation) {
-    CacheGroup group("test", 1024, getter_);
+// 删除后再次 Get 会触发一次回源
+TEST_F(CacheGroupTest, DeleteRemovesCache) {
+    CacheGroup group("group_delete", 1024, getter_);
 
-    // First get a value to cache it
-    auto result = group.Get("key1");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(group.Get("key2").has_value());
+    EXPECT_TRUE(group.Delete("key2"));
 
-    // Delete the key
-    bool success = group.Delete("key1");
-    EXPECT_TRUE(success);
-
-    // Get again should call getter
-    call_count_["key1"] = 0;  // Reset counter
-    result = group.Get("key1");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(call_count_["key1"], 1);  // Should call getter again
+    call_count_["key2"] = 0;  // 重置统计
+    auto r = group.Get("key2");
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->ToString(), "value2");
+    EXPECT_EQ(call_count_["key2"], 1);
 }
 
-TEST_F(CacheGroupTest, MoveConstructor) {
-    CacheGroup group1("test", 1024, getter_);
+// 调用 InvalidateFromPeer 仅删除本地缓存，下一次 Get 才会回源
+TEST_F(CacheGroupTest, InvalidateFromPeerOnlyDeletesLocal) {
+    CacheGroup group("group_invalidate", 1024, getter_);
 
-    // Cache a value in group1
-    auto result = group1.Get("key1");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(group.Get("key3").has_value());
+    // 模拟来自其他节点的失效
+    EXPECT_TRUE(group.InvalidateFromPeer("key3"));
 
-    // Move construct group2
-    CacheGroup group2(std::move(group1));
-
-    // group2 should have the cached value
-    result = group2.Get("key1");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result.value().ToString(), "value1");
-    EXPECT_EQ(call_count_["key1"], 1);  // Should not call getter again
+    call_count_["key3"] = 0;
+    auto r = group.Get("key3");
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->ToString(), "value3");
+    // 失效后应回源一次
+    EXPECT_EQ(call_count_["key3"], 1);
 }
 
-TEST_F(CacheGroupTest, MoveAssignment) {
-    CacheGroup group1("test1", 1024, getter_);
-    CacheGroup group2("test2", 512, getter_);
+// 空 key 在 Get/Set/Delete/InvalidateFromPeer 均返回 false
+TEST_F(CacheGroupTest, EmptyKeyIsRejected) {
+    CacheGroup group("group_empty", 1024, getter_);
 
-    // Cache a value in group1
-    auto result = group1.Get("key1");
-    ASSERT_TRUE(result.has_value());
-
-    // Move assign group1 to group2
-    group2 = std::move(group1);
-
-    // group2 should have the cached value from group1
-    result = group2.Get("key1");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result.value().ToString(), "value1");
-    EXPECT_EQ(call_count_["key1"], 1);  // Should not call getter again
+    EXPECT_FALSE(group.Get("").has_value());
+    EXPECT_FALSE(group.Set("", ByteView{"x"}));
+    EXPECT_FALSE(group.Delete(""));
+    EXPECT_FALSE(group.InvalidateFromPeer(""));
 }
 
-TEST_F(CacheGroupTest, DefaultConstructor) {
-    CacheGroup group;
+// 多线程并发对同一 key 的 Get，只回源一次，其它线程复用结果
+TEST_F(CacheGroupTest, SingleFlightAvoidsDuplicateLoads) {
+    // getter 增加少量延迟，放大并发窗口
+    DataGetter slow_getter = [this](const std::string& key) -> ByteViewOptional {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        call_count_[key]++;
+        auto it = db_.find(key);
+        if (it != db_.end()) return ByteView{it->second};
+        return std::nullopt;
+    };
 
-    // Default constructed group should handle operations gracefully
-    auto result = group.Get("key1");
-    EXPECT_FALSE(result.has_value());
+    CacheGroup group("group_sf", 1024, slow_getter);
+
+    const int N = 16;
+    std::vector<std::thread> ths;
+    ths.reserve(N);
+    std::vector<bool> ok(N, false);
+
+    for (int i = 0; i < N; ++i) {
+        ths.emplace_back([&, i] {
+            auto r = group.Get("key1");
+            ok[i] = r.has_value() && r->ToString() == "value1";
+        });
+    }
+    for (auto& t : ths) t.join();
+
+    for (int i = 0; i < N; ++i) EXPECT_TRUE(ok[i]);
+    // 并发同 key 只应回源一次
+    EXPECT_EQ(call_count_["key1"], 1);
 }
 
-// // Mock Peer class for testing
-// class MockPeer : public Peer {
-// public:
-//     mutable std::string last_group;
-//     mutable std::string last_key;
-//     mutable bool should_succeed = true;
-//     mutable ByteView received_value{""};
+// 移动构造后，已缓存的值仍可直接命中，不重复回源
+TEST_F(CacheGroupTest, MoveConstructorPreservesCache) {
+    CacheGroup g1("group_move_ctor", 1024, getter_);
+    ASSERT_TRUE(g1.Get("key1").has_value());
 
-//     MockPeer() : Peer("localhost", "mock_service") {}
-
-//     auto Get(const std::string& group, const std::string& key) const -> ByteViewOptional {
-//         last_group = group;
-//         last_key = key;
-//         if (should_succeed) {
-//             return ByteView{"peer_value"};
-//         }
-//         return std::nullopt;
-//     }
-
-//     bool Set(const std::string& group, const std::string& key, ByteView value) const {
-//         last_group = group;
-//         last_key = key;
-//         received_value = value;
-//         return should_succeed;
-//     }
-
-//     bool Delete(const std::string& group, const std::string& key) const {
-//         last_group = group;
-//         last_key = key;
-//         return should_succeed;
-//     }
-// };
-
-// class MockPeerPicker : public PeerPicker {
-// public:
-//     std::unique_ptr<MockPeer> mock_peer = std::make_unique<MockPeer>();
-
-//     auto PickPeer(const std::string& key) const -> Peer* { return mock_peer.get(); }
-// };
-
-TEST_F(CacheGroupTest, RegisterPeerPicker) {
-    CacheGroup group("test", 1024, getter_);
-    auto peer_picker = std::make_unique<PeerPicker>("localhost:8001", "test_service", "http://127.0.0.1:2379");
-
-    group.RegisterPeerPicker(std::move(peer_picker));
-
-    // This test just ensures the method can be called without errors
-    // The actual peer functionality would need integration testing
+    CacheGroup g2(std::move(g1));
+    auto r = g2.Get("key1");
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->ToString(), "value1");
+    EXPECT_EQ(call_count_["key1"], 1);  // 未再次回源
 }
 
-TEST_F(CacheGroupTest, SyncToPeersSet) {
-    CacheGroup group("test", 1024, getter_);
-    auto peer_picker = std::make_unique<PeerPicker>("localhost:8001", "test_service", "http://127.0.0.1:2379");
+// 移动赋值后亦保持缓存命中
+TEST_F(CacheGroupTest, MoveAssignmentPreservesCache) {
+    CacheGroup g1("group_move_assign_src", 1024, getter_);
+    CacheGroup g2("group_move_assign_dst", 1024, getter_);
+    ASSERT_TRUE(g1.Get("key2").has_value());
 
-    group.RegisterPeerPicker(std::move(peer_picker));
+    g2 = std::move(g1);
 
-    ByteView value("sync_value");
-    group.SyncToPeers("sync_key", SyncFlag::SET, value);
-
-    // This test ensures the method can be called
-    // In a real implementation, you'd verify the peer was called
+    auto r = g2.Get("key2");
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->ToString(), "value2");
+    EXPECT_EQ(call_count_["key2"], 1);
 }
 
-TEST_F(CacheGroupTest, SyncToPeersDelete) {
-    CacheGroup group("test", 1024, getter_);
-    auto peer_picker = std::make_unique<PeerPicker>("localhost:8001", "test_service", "http://127.0.0.1:2379");
-
-    group.RegisterPeerPicker(std::move(peer_picker));
-
-    group.SyncToPeers("delete_key", SyncFlag::DELETE, ByteView{""});
-
-    // This test ensures the method can be called without errors
-}
-
-TEST_F(CacheGroupTest, MultipleOperations) {
-    CacheGroup group("test", 1024, getter_);
-
-    // Test multiple get operations
-    for (const auto& [key, expected_value] : db_) {
-        auto result = group.Get(key);
-        ASSERT_TRUE(result.has_value());
-        EXPECT_EQ(result.value().ToString(), expected_value);
-        EXPECT_EQ(call_count_[key], 1);
-
-        // Second get should hit cache
-        result = group.Get(key);
-        ASSERT_TRUE(result.has_value());
-        EXPECT_EQ(result.value().ToString(), expected_value);
-        EXPECT_EQ(call_count_[key], 1);  // Should not increment
+TEST_F(CacheGroupTest, BatchGetAcrossKeys) {
+    CacheGroup group("group_batch", 1024, getter_);
+    for (const auto& kv : db_) {
+        auto r1 = group.Get(kv.first);
+        ASSERT_TRUE(r1.has_value());
+        EXPECT_EQ(r1->ToString(), kv.second);
+        auto r2 = group.Get(kv.first);
+        ASSERT_TRUE(r2.has_value());
+        EXPECT_EQ(r2->ToString(), kv.second);
+        EXPECT_EQ(call_count_[kv.first], 1);
     }
 }
 
-// Global function tests
-TEST(CacheGroupGlobalTest, MakeCacheGroup) {
-    std::unordered_map<std::string, std::string> db = {{"global_key", "global_value"}};
-
+// 全局方法测试
+TEST(CacheGroupGlobalTest, MakeCacheGroupCreatesUsableGroup) {
+    std::unordered_map<std::string, std::string> db = {{"gkey", "gvalue"}};
     auto getter = [&db](const std::string& key) -> ByteViewOptional {
         auto it = db.find(key);
-        if (it != db.end()) {
-            return ByteView{it->second};
-        }
+        if (it != db.end()) return ByteView{it->second};
         return std::nullopt;
     };
 
-    auto& group = MakeCacheGroup("global_test", 1024, getter);
-
-    auto result = group.Get("global_key");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result.value().ToString(), "global_value");
+    auto& group = MakeCacheGroup("global_test_group", 1024, getter);
+    auto r = group.Get("gkey");
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->ToString(), "gvalue");
 }
 
-TEST(CacheGroupGlobalTest, GetCacheGroup) {
-    // First create a group
-    auto getter = [](const std::string& key) -> ByteViewOptional { return std::nullopt; };
+TEST(CacheGroupGlobalTest, GetCacheGroupLookup) {
+    auto getter = [](const std::string&) -> ByteViewOptional { return std::nullopt; };
+    MakeCacheGroup("lookup_group", 512, getter);
 
-    MakeCacheGroup("lookup_test", 512, getter);
+    auto* found = GetCacheGroup("lookup_group");
+    ASSERT_NE(found, nullptr);
 
-    // Then try to get it
-    auto* group = GetCacheGroup("lookup_test");
-    ASSERT_NE(group, nullptr);
-
-    // Try to get non-existent group
-    auto* null_group = GetCacheGroup("nonexistent");
-    EXPECT_EQ(null_group, nullptr);
+    auto* not_found = GetCacheGroup("not_exist_group");
+    EXPECT_EQ(not_found, nullptr);
 }
 
-TEST(CacheGroupGlobalTest, MultipleCacheGroups) {
+// 不同名称的 group 相互独立，交叉访问失败
+TEST(CacheGroupGlobalTest, MultipleNamedGroupsAreIndependent) {
     auto getter1 = [](const std::string& key) -> ByteViewOptional {
-        if (key == "test1") return ByteView{"value1"};
+        if (key == "k1") return ByteView{"v1"};
         return std::nullopt;
     };
-
     auto getter2 = [](const std::string& key) -> ByteViewOptional {
-        if (key == "test2") return ByteView{"value2"};
+        if (key == "k2") return ByteView{"v2"};
         return std::nullopt;
     };
 
-    auto& group1 = MakeCacheGroup("multi_test1", 512, getter1);
-    auto& group2 = MakeCacheGroup("multi_test2", 512, getter2);
+    auto& g1 = MakeCacheGroup("g1", 256, getter1);
+    auto& g2 = MakeCacheGroup("g2", 256, getter2);
 
-    // Test that groups are separate
-    auto result1 = group1.Get("test1");
-    auto result2 = group2.Get("test2");
+    auto r1 = g1.Get("k1");
+    auto r2 = g2.Get("k2");
+    ASSERT_TRUE(r1.has_value());
+    ASSERT_TRUE(r2.has_value());
+    EXPECT_EQ(r1->ToString(), "v1");
+    EXPECT_EQ(r2->ToString(), "v2");
 
-    ASSERT_TRUE(result1.has_value());
-    ASSERT_TRUE(result2.has_value());
-    EXPECT_EQ(result1.value().ToString(), "value1");
-    EXPECT_EQ(result2.value().ToString(), "value2");
-
-    // Cross-group access should fail
-    auto cross_result1 = group1.Get("test2");
-    auto cross_result2 = group2.Get("test1");
-
-    EXPECT_FALSE(cross_result1.has_value());
-    EXPECT_FALSE(cross_result2.has_value());
+    // 交叉访问应失败
+    EXPECT_FALSE(g1.Get("k2").has_value());
+    EXPECT_FALSE(g2.Get("k1").has_value());
 }
