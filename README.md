@@ -291,11 +291,13 @@ $ curl -X DELETE http://localhost:9000/api/cache/test/Kerolt
 - 处理缓存操作（Get、Set、Delete）
 - 使用 singleflight 模式防止缓存击穿
 
+改动:删除同步操作(synctopeers)
+
 ### 一致性哈希
 
 使用一致性哈希确定哪个节点负责哪个键，确保键值的均匀分布，并在添加或移除节点时最小化重新分布。
 
-### PeerPicker 节点选择器
+### PeerPicker 节点选择器(删除,将节点选择功能交给网关)
 
 节点管理系统使节点能够相互通信，使用一致性哈希分布键值，并监听 etcd 的键值对变化。
 
@@ -311,9 +313,14 @@ $ curl -X DELETE http://localhost:9000/api/cache/test/Kerolt
 
 项目使用 etcd 进行服务发现。每个节点启动时向 etcd 注册自己（通过 gRPC Server），同时节点通过监听 etcd 变化发现可用的 peer 节点。
 
-### 网关服务
+### 网关服务(承担更多任务)
 
-HTTP 网关通过 etcd 自动发现可用的缓存节点，并通过 gRPC 与它们通信，为外部客户端提供标准的REST API接口
+HTTP 网关通过 etcd 自动发现可用的缓存节点，并通过 gRPC 与它们通信，为外部客户端提供标准的REST API接口.
+改动:
+1. 只保留网关的节点选择功能,移除各个节点的节点选择器。
+2. 网关的服务发现不是10s进行一次，而是和原先的节点一样，先拉取所有的，再用etcd_watcher监听。
+3. 对于数据脏读、同步问题，交给网关处理，不再由各节点处理。
+具体思路是，网关的set操作除了向选择的哈希节点发送set请求外，还给其余节点发送失效通知。网关的delete操作向所有哈希节点发送delete操作。
 
 ## 许可证
 

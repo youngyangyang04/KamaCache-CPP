@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "kcache/cache.h"
-#include "kcache/peer.h"
 #include "kcache/singleflight.h"
 
 namespace kcache {
@@ -33,24 +32,24 @@ enum class SyncFlag {
     INVALIDATE,  // 缓存失效，只删除本地缓存，不通过getter重新加载
 };
 
-class CacheGroup {
+class KCacheGroup {
 public:
-    CacheGroup() = default;
+    KCacheGroup() = default;
 
-    CacheGroup(std::string name, int64_t bytes, DataGetter getter)
+    KCacheGroup(std::string name, int64_t bytes, DataGetter getter)
         : cache_(std::make_unique<LRUCache>(bytes)), name_(name), getter_(getter) {}
 
-    CacheGroup(const CacheGroup&) = delete;
+    KCacheGroup(const KCacheGroup&) = delete;
 
-    auto operator=(const CacheGroup& other) -> CacheGroup& = delete;
+    auto operator=(const KCacheGroup& other) -> KCacheGroup& = delete;
 
-    CacheGroup(CacheGroup&& other) {
+    KCacheGroup(KCacheGroup&& other) {
         cache_ = std::move(other.cache_);
         name_ = std::move(other.name_);
         getter_ = std::move(other.getter_);
     }
 
-    auto operator=(CacheGroup&& other) -> CacheGroup& {
+    auto operator=(KCacheGroup&& other) -> KCacheGroup& {
         cache_ = std::move(other.cache_);
         name_ = std::move(other.name_);
         getter_ = std::move(other.getter_);
@@ -59,28 +58,19 @@ public:
 
     auto Get(const std::string& key) -> ByteViewOptional;
 
-    bool Set(const std::string& key, ByteView b, bool is_from_peer = false);
+    bool Set(const std::string& key, ByteView b);
 
-    bool Delete(const std::string& key, bool is_from_peer = false);
+    bool Delete(const std::string& key);
 
     // 处理来自其他节点的失效请求
     bool InvalidateFromPeer(const std::string& key);
 
-    // 自身主动处理失效缓存
-    bool Invalidate(const std::string& key);
-
-    void SyncToPeers(const std::string& key, SyncFlag op, ByteView value);
-
-    void RegisterPeerPicker(std::unique_ptr<PeerPicker>&& peer_picker);
-
 private:
     auto Load(const std::string& key) -> ByteViewOptional;
     auto LoadData(const std::string& key) -> ByteViewOptional;
-    auto LoadFromPeer(Peer* peer, const std::string& key) -> ByteViewOptional;
 
 private:
     std::unique_ptr<LRUCache> cache_;
-    std::unique_ptr<PeerPicker> peer_picker_;
     std::string name_;
     std::atomic<bool> is_close_{false};
     DataGetter getter_;
@@ -88,8 +78,8 @@ private:
     GroupStatus status_;
 };
 
-auto MakeCacheGroup(const std::string& name, int64_t bytes, DataGetter getter) -> CacheGroup&;
-auto GetCacheGroup(const std::string& name) -> CacheGroup*;
+auto MakeCacheGroup(const std::string& name, int64_t bytes, DataGetter getter) -> KCacheGroup&;
+auto GetCacheGroup(const std::string& name) -> KCacheGroup*;
 
 }  // namespace kcache
 
