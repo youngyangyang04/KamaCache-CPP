@@ -13,7 +13,7 @@ services:
     network_mode: host
     depends_on:
       - kcache-etcd
-    command: ["/app/bin/knode", "--port=8001", "--node=A", "--etcd_endpoints=http://localhost:2379"]
+    command: ["/app/bin/node_server", "--port=8001", "--node=A", "--etcd_endpoints=http://localhost:2379"]
 
   kcache-node-b:
     image: kcache:latest
@@ -21,7 +21,7 @@ services:
     network_mode: host
     depends_on:
       - kcache-etcd
-    command: ["/app/bin/knode", "--port=8002", "--node=B", "--etcd_endpoints=http://localhost:2379"]
+    command: ["/app/bin/node_server", "--port=8002", "--node=B", "--etcd_endpoints=http://localhost:2379"]
 
   kcache-node-c:
     image: kcache:latest
@@ -29,15 +29,15 @@ services:
     network_mode: host
     depends_on:
       - kcache-etcd
-    command: ["/app/bin/knode", "--port=8003", "--node=C", "--etcd_endpoints=http://localhost:2379"]
+    command: ["/app/bin/node_server", "--port=8003", "--node=C", "--etcd_endpoints=http://localhost:2379"]
 
-  kgateway:
+  kcache-gateway:
     image: kcache:latest
-    container_name: kgateway
+    container_name: kcache-gateway
     network_mode: host
     depends_on:
       - kcache-etcd
       - kcache-node-a
       - kcache-node-b
       - kcache-node-c
-    command: ["/app/bin/kgateway", "--http_port=9000", "--etcd_endpoints=http://localhost:2379"]
+    command: ["/app/bin/http_gateway", "--http_port=9000", "--etcd_endpoints=http://localhost:2379"]
