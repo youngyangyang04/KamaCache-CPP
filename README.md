@@ -2,7 +2,9 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kerolt/kcache)
 
-KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据分片，确保负载均衡，采用 LRU（最近最少使用）缓存淘汰算法；使用 gRPC 进行节点间高效通信，并基于 etcd 实现服务注册与发现，实时监控集群状态变化。该项目使用 conan 作为包管理工具，使用 CMake 作为项目的构建工具。
+KCache 是一个类似 Memcached 的分布式缓存系统，采用客户端-服务器架构。系统基于一致性哈希算法实现数据分片和负载均衡，使用 LRU（最近最少使用）缓存淘汰算法。节点间通过 gRPC 进行高效通信，基于 etcd 实现服务注册与发现。
+
+与 Memcached 类似，KCache 提供了独立的客户端 SDK，应用程序通过 SDK 直接与缓存集群交互。同时提供了 HTTP 网关作为示例，展示如何基于 SDK 构建 REST API 服务。该项目使用 Conan 作为包管理工具，使用 CMake 作为构建工具。
 
 ## 运行环境
 
@@ -27,19 +29,62 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 
 > 项目 v2 版本不使用 vcpkg 了是因为其无法下载 etcd-cpp-apiv3，为了方便管理第三方库就只使用了 conan。
 
-## 数据流程
+## 架构设计
 
-当有客户端请求 kcache node 中的数据时：
+KCache 采用客户端-服务器架构，类似于 Memcached：
 
-1. 本地查找: 首先检查本地 LRU 缓存
-2. 节点路由: 使用一致性哈希确定负责节点
-3. 远程获取: 通过 gRPC 向目标节点请求数据
-4. 数据源回退: 如果缓存未命中，从原始数据源加载
-5. 缓存更新: 将数据存储到本地缓存以供后续使用
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   客户端1    │     │   客户端2    │     │  HTTP网关   │
+│ (使用 SDK)  │     │ (使用 SDK)  │     │ (基于 SDK)  │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+       │ ┌─────────────────┴───────────────────┘
+       │ │          一致性哈希路由 + 服务发现
+       │ │                   │
+       └─┴───────────────────┴─────────────────┐
+         │                                     │
+    ┌────▼────┐         ┌────────┐       ┌────▼────┐
+    │ Node A  │◄────────┤  etcd  ├──────►│ Node C  │
+    │ (gRPC)  │         │(注册中心)│       │ (gRPC)  │
+    └────┬────┘         └────────┘       └────┬────┘
+         │                                     │
+         └──────────────►┌────────┐◄───────────┘
+                        │ Node B  │
+                        │ (gRPC)  │
+                        └─────────┘
+```
 
-示意架构图如下：
+### 数据流程
 
-![alt text](image.png)
+**GET 请求：**
+1. 客户端/网关通过 SDK 使用一致性哈希确定目标节点
+2. 向目标节点发送 gRPC Get 请求
+3. 节点首先检查本地 LRU 缓存
+4. 若缓存未命中，从数据源加载（通过 Getter 回调）
+5. 将数据存入本地缓存并返回给客户端
+
+**SET 请求（强一致性）：**
+1. 客户端/网关通过一致性哈希确定主节点
+2. 向主节点发送 gRPC Set 请求写入数据
+3. 并发向其他所有节点发送 Invalidate 请求（缓存失效）
+4. 所有节点完成后返回成功
+
+**DELETE 请求：**
+1. 客户端/网关向所有节点广播 Delete 请求
+2. 各节点删除本地缓存
+3. 全部完成后返回成功
+
+## 设计理念
+
+KCache 的设计灵感来源于：
+- **Memcached**：采用客户端-服务器架构，提供独立的客户端 SDK
+- **GroupCache**：借鉴了 Group、SingleFlight 等概念，实现缓存穿透防护
+
+与 GroupCache 的主要区别：
+- GroupCache 是嵌入式缓存库，节点间自动协调；KCache 是独立服务，通过 SDK 访问
+- GroupCache 只读缓存；KCache 支持完整的 CRUD 操作
+- KCache 提供了更灵活的客户端集成方式
 
 ## 致谢
 
@@ -50,57 +95,38 @@ KCache 是一个分布式缓存系统，基于一致性哈希算法实现数据�
 
 ```
 .
-|-- .vscode
-|   `-- launch.json
-|-- example
-|   |-- CMakeLists.txt
-|   `-- example.cpp
-|-- src
-|   |-- cache
-|   |   `-- lru.cpp
-|   |-- consistent_hash
-|   |   `-- consistent_hash.cpp
-|   |-- group
-|   |   `-- group.cpp
-|   |-- include
-|   |   `-- kcache
-|   |       |-- cache.h
-|   |       |-- consistent_hash.h
-|   |       |-- group.h
-|   |       |-- grpc_server.h
-|   |       |-- peer.h
-|   |       |-- registry.h
-|   |       `-- singleflight.h
-|   |-- peer
-|   |   |-- peer.cpp
-|   |   `-- peer_picker.cpp
-|   |-- proto
-|   |   |-- kcache.grpc.pb.cc
-|   |   |-- kcache.grpc.pb.h
-|   |   |-- kcache.pb.cc
-|   |   |-- kcache.pb.h
-|   |   `-- kcache.proto
-|   |-- registry
-|   |   `-- registry.cpp
-|   |-- server
-|   |   `-- grpc_server.cpp
-|   |-- http_gateway.cpp
-|   |-- node.cpp
-|   `-- CMakeLists.txt
-|-- test
-|   |-- CMakeLists.txt
-|   |-- test_consistent_hash.cpp
-|   |-- test_group.cpp
-|   `-- test_lru.cpp
-|-- .clang-format
-|-- .gitignore
-|-- CMakeLists.txt
-|-- CMakePresets.json
-|-- conanfile.txt
-|-- image.png
-|-- LICENSE
-`-- README.md
+├── include/kcache          # 公共头文件（客户端 SDK）
+│   └── client.h           # KCacheClient SDK 接口
+├── src/
+│   ├── cache/             # LRU 缓存实现
+│   ├── client/            # 客户端 SDK 实现
+│   │   └── client_sdk.cpp
+│   ├── consistent_hash/   # 一致性哈希
+│   ├── group/             # 缓存组（逻辑命名空间）
+│   ├── peer/              # 节点间通信（gRPC 客户端）
+│   ├── server/            # gRPC 服务器
+│   ├── registry/          # etcd 服务注册
+│   ├── proto/             # Protobuf 定义
+│   │   └── kcache.proto
+│   ├── include/kcache/    # 内部头文件
+│   └── main.cpp           # 缓存节点入口
+├── example/
+│   └── http_gateway/      # HTTP 网关示例（基于 SDK）
+├── test/                  # 单元测试
+│   ├── test_lru.cpp
+│   ├── test_consistent_hash.cpp
+│   └── test_group.cpp
+├── CMakeLists.txt
+├── conanfile.txt
+└── README.md
 ```
+
+### 核心模块
+
+- **kcache_core**：核心业务逻辑库（缓存、哈希、组管理、服务器等）
+- **kcache_client_sdk**：客户端 SDK 库，封装服务发现、路由、通信
+- **node_server**：缓存节点可执行程序
+- **http_gateway**：HTTP 网关示例（展示如何使用 SDK）
 
 ## 本地运行
 
@@ -143,20 +169,14 @@ Filesystem found in kernel header but not in filesystems-gperf.gperf: PID_FS_MAG
 3. 构建项目：
 
     ```sh
-    cmake --build build [--target <target>]
+    cmake --build build -j
     ```
 
-完成后，在 `src/proto` 目录下会生成 `src/proto/kcache.proto` 相关的 pb 和 grpc 文件：
+完成后，在 `src/proto` 目录下会生成 Protobuf 相关文件，在 `bin/` 目录下会生成可执行程序：
 
-- kcache.grpc.pb.cc
-- kcache.grpc.pb.h
-- kcache.pb.cc
-- kcache.pb.h
-
-在 build/bin 目录下会生成可执行程序，其中
-
-- `knode` 为节点实例
-- `kgateway` 为网关服务器
+- `node_server`：缓存节点程序
+- `http_gateway`：HTTP 网关程序（示例）
+- `test_*`：单元测试程序
 
 ### 启动 etcd
 
@@ -170,14 +190,18 @@ docker run -d --name etcd \
 
 ### 运行
 
-在不同终端启动：
+在不同终端启动缓存节点：
 
 ```sh
-./build/bin/knode --port=8001 --node=A
-./build/bin/knode --port=8002 --node=B
-./build/bin/knode --port=8003 --node=C
+./bin/node_server --port=8001 --node=A
+./bin/node_server --port=8002 --node=B
+./bin/node_server --port=8003 --node=C
+```
 
-./build/bin/kgateway
+启动 HTTP 网关（可选，也可以直接使用 SDK）：
+
+```sh
+./bin/http_gateway --http_port=9000
 ```
 
 ## Docker 运行
@@ -217,12 +241,12 @@ docker run -d 
   -p 8001:8001   
   --network host   
   kcache:latest   
-  /app/bin/knode --port=8001 --node=A
+  /app/bin/node_server --port=8001 --node=A
 ```
 
 ### 多节点集群  
 
-使用 Docker Compose 一键启动集群：  
+使用 Docker Compose 一键启动集群。其中有三个节点，还有一个使用 client sdk 构建的示例网关。
 
 ```sh
 # 启动整个集群（包含 etcd + 3个节点 + 网关）  
@@ -246,81 +270,93 @@ docker compose logs -f
 docker compose down  
 ```
 
-## 使用 curl 访问服务  
+## 核心组件
+
+### 客户端 SDK (KCacheClient)
+
+独立的客户端库，提供与缓存集群交互的统一接口：
+
+```cpp
+// 初始化客户端
+KCacheClient client("http://127.0.0.1:2379", "kcache");
+
+// 基本操作
+auto value = client.Get("group_name", "key");  // 获取缓存
+client.Set("group_name", "key", "value");      // 设置缓存
+client.Delete("group_name", "key");             // 删除缓存
+```
+
+**核心功能：**
+- 自动服务发现（通过 etcd watch 实时更新节点列表）
+- 一致性哈希路由（智能选择目标节点）
+- 连接池管理（复用 gRPC 连接）
+- 强一致性保证（Set 时自动广播失效，Delete 时全节点删除）
+
+### 缓存节点 (Node Server)
+
+每个节点是独立的缓存服务器：
+
+**功能：**
+- 提供 gRPC 服务端接口（Get/Set/Delete/Invalidate）
+- 管理本地 LRU 缓存
+- 启动时自动注册到 etcd
+- 响应客户端请求并执行缓存操作
+
+**内部组件：**
+- **Group**：缓存的逻辑命名空间，支持多租户隔离
+- **LRU Cache**：线程安全的本地缓存，自动淘汰最少使用数据
+- **SingleFlight**：防止缓存击穿，同一 key 的并发请求合并为一次加载
+
+### 一致性哈希
+
+客户端使用一致性哈希算法将 key 映射到节点：
+
+- 虚拟节点机制确保负载均衡
+- 节点变化时最小化数据迁移
+- 支持动态负载调整
+
+### 服务注册与发现
+
+基于 etcd 实现：
+
+- 节点启动时注册自己的地址到 etcd
+- 客户端通过 etcd watch 实时感知节点变化
+- 节点下线时自动从集群中移除
+
+### HTTP 网关（可选）
+
+基于 SDK 实现的 REST API 网关，展示如何集成客户端库：
+
+- 将 HTTP 请求转换为 SDK 调用
+- 提供标准的 REST API 接口
+- 可作为参考实现集成到现有应用
+
+
+## 使用 curl 访问示例网关
 
 启动服务后，可以通过本机的 9000 端口来访问服务：  
 
 1. Get  
 
 ```sh
-curl http://127.0.0.1:9000/api/cache/test/Kerolt  
+curl http://127.0.0.1:9000/api/cache/default/Kerolt  
 # 输出：{"group":"test","key":"Kerolt","value":"370"}⏎  
 ```
 
 2. Set  
 
 ```sh
-$ curl -X POST http://127.0.0.1:9000/api/cache/test/Kerolt -d 'value=1219'     
+$ curl -X POST http://127.0.0.1:9000/api/cache/default/Kerolt -d 'value=1219'     
 # 输出：{"group":"test","key":"Kerolt","success":true,"value":"value=1219"}⏎  
 ```
 
 3. Delete
 
 ```sh
-$ curl -X DELETE http://localhost:9000/api/cache/test/Kerolt  
+$ curl -X DELETE http://localhost:9000/api/cache/default/Kerolt  
 # 输出：{"deleted":true,"group":"test","key":"Kerolt"}⏎  
 ```
 
-## 核心组件
-
-### LRU Cache 本地缓存
-
-`Cache` 组件管理本地存储的缓存数据，底层采用 LRU 算法
-
-- 提供线程安全的缓存访问
-- 管理统计信息（命中、未命中）
-
-### Group 缓存组
-
-`Group` 是缓存的逻辑命名空间，**是缓存操作的主要接口**。外部可通过 rpc 来使用缓存节点，Group 会去执行对应的操作。
-
-主要职责：
-
-- 管理缓存数据的逻辑命名空间
-- 协调本地缓存和远程节点之间的访问
-- 处理缓存操作（Get、Set、Delete）
-- 使用 singleflight 模式防止缓存击穿
-
-改动:删除同步操作(synctopeers)
-
-### 一致性哈希
-
-使用一致性哈希确定哪个节点负责哪个键，确保键值的均匀分布，并在添加或移除节点时最小化重新分布。
-
-### PeerPicker 节点选择器(删除,将节点选择功能交给网关)
-
-节点管理系统使节点能够相互通信，使用一致性哈希分布键值，并监听 etcd 的键值对变化。
-
-### gRPC Server
-
-每个节点都会跑一个 gRPC server，每个节点既是一个客户端也是服务端。
-
-- 处理其他节点的请求（其他节点在没有缓存某些键的时候会访问含有这个键的节点）
-- 向服务注册中心（etcd）注册自己
-- 管理服务器生命周期
-
-### 服务注册与发现
-
-项目使用 etcd 进行服务发现。每个节点启动时向 etcd 注册自己（通过 gRPC Server），同时节点通过监听 etcd 变化发现可用的 peer 节点。
-
-### 网关服务(承担更多任务)
-
-HTTP 网关通过 etcd 自动发现可用的缓存节点，并通过 gRPC 与它们通信，为外部客户端提供标准的REST API接口.
-改动:
-1. 只保留网关的节点选择功能,移除各个节点的节点选择器。
-2. 网关的服务发现不是10s进行一次，而是和原先的节点一样，先拉取所有的，再用etcd_watcher监听。
-3. 对于数据脏读、同步问题，交给网关处理，不再由各节点处理。
-具体思路是，网关的set操作除了向选择的哈希节点发送set请求外，还给其余节点发送失效通知。网关的delete操作向所有哈希节点发送delete操作。
 
 ## 许可证
 
