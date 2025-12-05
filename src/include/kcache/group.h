@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "kcache/cache.h"
-#include "kcache/peer.h"
 #include "kcache/singleflight.h"
 
 namespace kcache {
@@ -69,11 +68,9 @@ public:
 private:
     auto Load(const std::string& key) -> ByteViewOptional;
     auto LoadData(const std::string& key) -> ByteViewOptional;
-    auto LoadFromPeer(Peer* peer, const std::string& key) -> ByteViewOptional;
 
 private:
     std::unique_ptr<LRUCache> cache_;
-    std::unique_ptr<PeerPicker> peer_picker_;
     std::string name_;
     std::atomic<bool> is_close_{false};
     DataGetter getter_;

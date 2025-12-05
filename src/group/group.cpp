@@ -12,7 +12,6 @@
 
 #include "kcache/cache.h"
 #include "kcache/group.h"
-#include "kcache/peer.h"
 
 namespace kcache {
 
@@ -123,14 +122,6 @@ auto KCacheGroup::LoadData(const std::string& key) -> ByteViewOptional {
     }
     ++status_.local_hits;
     return val;
-}
-
-auto KCacheGroup::LoadFromPeer(Peer* peer, const std::string& key) -> ByteViewOptional {
-    auto value = peer->Get(name_, key);
-    if (!value) {
-        return std::nullopt;
-    }
-    return value;
 }
 
 }  // namespace kcache
