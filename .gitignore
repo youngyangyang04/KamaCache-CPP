@@ -2,6 +2,7 @@
 .xmake/
 
 build/
+bin/
 CMakeUserPresets.json
 
 # MacOS Cache

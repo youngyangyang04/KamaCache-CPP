@@ -1,4 +1,4 @@
-#include "kcache/grpc_server.h"
+#include "kcache/server.h"
 
 #include <fmt/base.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -13,7 +13,7 @@
 
 namespace kcache {
 
-CacheGrpcServer::CacheGrpcServer(const std::string& addr, const std::string& svc_name, ServerOptions opts)
+KCacheServer::KCacheServer(const std::string& addr, const std::string& svc_name, ServerOptions opts)
     : addr_(addr), svc_name_(svc_name), opts_(opts) {
     // 创建etcd注册器
     etcd_register_ = std::make_unique<EtcdRegistry>(opts_.etcd_endpoints[0]);
@@ -22,7 +22,7 @@ CacheGrpcServer::CacheGrpcServer(const std::string& addr, const std::string& svc
     }
 }
 
-auto CacheGrpcServer::Get(grpc::ServerContext* context, const pb::Request* request, pb::GetResponse* response)
+auto KCacheServer::Get(grpc::ServerContext* context, const pb::Request* request, pb::GetResponse* response)
     -> grpc::Status {
     auto group = GetCacheGroup(request->group());
     if (!group) {
@@ -36,7 +36,7 @@ auto CacheGrpcServer::Get(grpc::ServerContext* context, const pb::Request* reque
     return grpc::Status::OK;
 }
 
-auto CacheGrpcServer::Set(grpc::ServerContext* context, const pb::Request* request, pb::SetResponse* response)
+auto KCacheServer::Set(grpc::ServerContext* context, const pb::Request* request, pb::SetResponse* response)
     -> grpc::Status {
     auto group = GetCacheGroup(request->group());
     if (!group) {
@@ -47,7 +47,7 @@ auto CacheGrpcServer::Set(grpc::ServerContext* context, const pb::Request* reque
     return grpc::Status::OK;
 }
 
-auto CacheGrpcServer::Delete(grpc::ServerContext* context, const pb::Request* request, pb::DeleteResponse* response)
+auto KCacheServer::Delete(grpc::ServerContext* context, const pb::Request* request, pb::DeleteResponse* response)
     -> grpc::Status {
     auto group = GetCacheGroup(request->group());
     if (!group) {
@@ -58,8 +58,8 @@ auto CacheGrpcServer::Delete(grpc::ServerContext* context, const pb::Request* re
     return grpc::Status::OK;
 }
 
-auto CacheGrpcServer::Invalidate(grpc::ServerContext* context, const pb::Request* request,
-                                 pb::InvalidateResponse* response) -> grpc::Status {
+auto KCacheServer::Invalidate(grpc::ServerContext* context, const pb::Request* request,
+                              pb::InvalidateResponse* response) -> grpc::Status {
     auto group = GetCacheGroup(request->group());
     if (!group) {
         return grpc::Status(grpc::StatusCode::NOT_FOUND, "Group not found");
@@ -71,7 +71,7 @@ auto CacheGrpcServer::Invalidate(grpc::ServerContext* context, const pb::Request
 }
 
 // 启动 gRPC 服务器
-void CacheGrpcServer::Start() {
+void KCacheServer::Start() {
     try {
         // 配置gRPC服务器选项
         grpc::ServerBuilder builder;
@@ -124,7 +124,7 @@ void CacheGrpcServer::Start() {
 }
 
 // 关闭 gRPC 服务器
-void CacheGrpcServer::Stop() {
+void KCacheServer::Stop() {
     is_stop_ = true;
     if (etcd_register_) {
         etcd_register_->Unregister();
@@ -138,7 +138,7 @@ void CacheGrpcServer::Stop() {
 }
 
 // TODO 实现加载 TLS 证书
-auto CacheGrpcServer::LoadTLSCredentials(const std::string& cert_file, const std::string& key_file)
+auto KCacheServer::LoadTLSCredentials(const std::string& cert_file, const std::string& key_file)
     -> std::shared_ptr<grpc::ServerCredentials> {
     return grpc::SslServerCredentials(grpc::SslServerCredentialsOptions{});
 }

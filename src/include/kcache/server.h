@@ -51,10 +51,10 @@ inline auto WithTLS(const std::string& certFile, const std::string& keyFile) -> 
     };
 }
 
-class CacheGrpcServer final : public pb::KCache::Service {
+class KCacheServer final : public pb::KCache::Service {
 public:
-    CacheGrpcServer(const std::string& addr, const std::string& svc_name, ServerOptions opts = ServerOptions{});
-    ~CacheGrpcServer() = default;
+    KCacheServer(const std::string& addr, const std::string& svc_name, ServerOptions opts = ServerOptions{});
+    ~KCacheServer() = default;
 
     auto Get(grpc::ServerContext* context, const pb::Request* request, pb::GetResponse* response)
         -> grpc::Status override;

@@ -1,3 +1,10 @@
+# 收集核心源文件（排除 main.cpp 和 client 目录）
+file(GLOB_RECURSE KCACHE_CORE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+list(REMOVE_ITEM KCACHE_CORE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
+# 排除 client 目录的所有文件
+file(GLOB_RECURSE CLIENT_FILES "${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp")
+list(REMOVE_ITEM KCACHE_CORE_SRC ${CLIENT_FILES})
+
 # 查找 protoc 编译器
 if(CMAKE_CROSSCOMPILING)
     find_program(PROTOC_EXE protoc)
@@ -27,29 +34,24 @@ add_custom_command(
     OUTPUT ${PROTO_CPP_FILE} ${PROTO_HDR_FILE} ${GRPC_CPP_FILE} ${GRPC_HDR_FILE}
     DEPENDS ${PROTO_FILE})
 
-# 将生成的 proto 相关的 cpp 文件构建成一个库
-add_library(kcache_proto STATIC ${PROTO_CPP_FILE} ${PROTO_HDR_FILE}
-                                ${GRPC_CPP_FILE} ${GRPC_HDR_FILE})
-target_link_libraries(kcache_proto PUBLIC protobuf::protobuf grpc::grpc)
-
-file(GLOB_RECURSE KCACHE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-list(REMOVE_ITEM KCACHE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/http_gateway.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/node.cpp")
-
-# http 网关服务器
-add_executable(kgateway ${KCACHE_SRC}
-                        "${CMAKE_CURRENT_SOURCE_DIR}/http_gateway.cpp")
-target_link_libraries(
-    kgateway
-    kcache_proto
+# 核心库
+add_library(kcache_core STATIC 
+    ${PROTO_CPP_FILE} 
+    ${PROTO_HDR_FILE}
+    ${GRPC_CPP_FILE}
+    ${GRPC_HDR_FILE} 
+    ${KCACHE_CORE_SRC})
+target_link_libraries(kcache_core PUBLIC
     etcd-cpp-apiv3::etcd-cpp-apiv3
     fmt::fmt
     spdlog::spdlog
-    gflags::gflags
-    httplib::httplib
-    nlohmann_json::nlohmann_json)
+    protobuf::protobuf
+    grpc::grpc)
 
-# 缓存 node 节点
-add_executable(knode ${KCACHE_SRC} "${CMAKE_CURRENT_SOURCE_DIR}/node.cpp")
-target_link_libraries(knode kcache_proto etcd-cpp-apiv3::etcd-cpp-apiv3
-                      fmt::fmt spdlog::spdlog gflags::gflags)
+# node server
+add_executable(node_server "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
+target_link_libraries(node_server
+    kcache_core
+    gflags::gflags)
+
+add_subdirectory(client)

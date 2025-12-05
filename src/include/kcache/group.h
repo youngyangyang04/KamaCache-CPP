@@ -33,24 +33,24 @@ enum class SyncFlag {
     INVALIDATE,  // 缓存失效，只删除本地缓存，不通过getter重新加载
 };
 
-class CacheGroup {
+class KCacheGroup {
 public:
-    CacheGroup() = default;
+    KCacheGroup() = default;
 
-    CacheGroup(std::string name, int64_t bytes, DataGetter getter)
+    KCacheGroup(std::string name, int64_t bytes, DataGetter getter)
         : cache_(std::make_unique<LRUCache>(bytes)), name_(name), getter_(getter) {}
 
-    CacheGroup(const CacheGroup&) = delete;
+    KCacheGroup(const KCacheGroup&) = delete;
 
-    auto operator=(const CacheGroup& other) -> CacheGroup& = delete;
+    auto operator=(const KCacheGroup& other) -> KCacheGroup& = delete;
 
-    CacheGroup(CacheGroup&& other) {
+    KCacheGroup(KCacheGroup&& other) {
         cache_ = std::move(other.cache_);
         name_ = std::move(other.name_);
         getter_ = std::move(other.getter_);
     }
 
-    auto operator=(CacheGroup&& other) -> CacheGroup& {
+    auto operator=(KCacheGroup&& other) -> KCacheGroup& {
         cache_ = std::move(other.cache_);
         name_ = std::move(other.name_);
         getter_ = std::move(other.getter_);
@@ -81,8 +81,8 @@ private:
     GroupStatus status_;
 };
 
-auto MakeCacheGroup(const std::string& name, int64_t bytes, DataGetter getter) -> CacheGroup&;
-auto GetCacheGroup(const std::string& name) -> CacheGroup*;
+auto MakeCacheGroup(const std::string& name, int64_t bytes, DataGetter getter) -> KCacheGroup&;
+auto GetCacheGroup(const std::string& name) -> KCacheGroup*;
 
 }  // namespace kcache
 

@@ -16,20 +16,20 @@
 
 namespace kcache {
 
-std::unordered_map<std::string, CacheGroup> cache_groups;
+std::unordered_map<std::string, KCacheGroup> cache_groups;
 std::mutex mtx;
 
-auto MakeCacheGroup(const std::string& name, int64_t bytes, DataGetter getter) -> CacheGroup& {
+auto MakeCacheGroup(const std::string& name, int64_t bytes, DataGetter getter) -> KCacheGroup& {
     if (getter == nullptr) {
         spdlog::critical("no getter function!");
         std::exit(1);
     }
     std::lock_guard lock{mtx};
-    cache_groups[name] = std::move(CacheGroup{name, bytes, getter});
+    cache_groups[name] = std::move(KCacheGroup{name, bytes, getter});
     return cache_groups[name];
 }
 
-auto GetCacheGroup(const std::string& name) -> CacheGroup* {
+auto GetCacheGroup(const std::string& name) -> KCacheGroup* {
     std::lock_guard lock{mtx};
     if (cache_groups.find(name) == cache_groups.end()) {
         return nullptr;
@@ -37,7 +37,7 @@ auto GetCacheGroup(const std::string& name) -> CacheGroup* {
     return &cache_groups[name];
 }
 
-auto CacheGroup::Get(const std::string& key) -> ByteViewOptional {
+auto KCacheGroup::Get(const std::string& key) -> ByteViewOptional {
     if (is_close_) {
         spdlog::error("Cache group [{}] is closed!!!", name_);
         return std::nullopt;
@@ -59,7 +59,7 @@ auto CacheGroup::Get(const std::string& key) -> ByteViewOptional {
     return Load(key);
 }
 
-bool CacheGroup::Set(const std::string& key, ByteView b) {
+bool KCacheGroup::Set(const std::string& key, ByteView b) {
     if (is_close_) {
         spdlog::error("Cache group [{}] is closed!!!", name_);
         return false;
@@ -73,7 +73,7 @@ bool CacheGroup::Set(const std::string& key, ByteView b) {
     return true;
 }
 
-bool CacheGroup::Delete(const std::string& key) {
+bool KCacheGroup::Delete(const std::string& key) {
     if (is_close_) {
         spdlog::error("Cache group [{}] is closed!!!", name_);
         return false;
@@ -87,7 +87,7 @@ bool CacheGroup::Delete(const std::string& key) {
     return true;
 }
 
-bool CacheGroup::InvalidateFromPeer(const std::string& key) {
+bool KCacheGroup::InvalidateFromPeer(const std::string& key) {
     if (is_close_) {
         spdlog::error("Cache group [{}] is closed!!!", name_);
         return false;
@@ -103,7 +103,7 @@ bool CacheGroup::InvalidateFromPeer(const std::string& key) {
     return true;
 }
 
-auto CacheGroup::Load(const std::string& key) -> ByteViewOptional {
+auto KCacheGroup::Load(const std::string& key) -> ByteViewOptional {
     auto ret = loader_.Do(key, [&] { return LoadData(key); });
     if (!ret) {
         spdlog::error("Failed to load data for key: {}", key);
@@ -114,7 +114,7 @@ auto CacheGroup::Load(const std::string& key) -> ByteViewOptional {
     return ret;
 }
 
-auto CacheGroup::LoadData(const std::string& key) -> ByteViewOptional {
+auto KCacheGroup::LoadData(const std::string& key) -> ByteViewOptional {
     spdlog::info("Try to load key [{}] from local", key);
     // 通过getter从数据源获取
     auto val = getter_(key);
@@ -125,7 +125,7 @@ auto CacheGroup::LoadData(const std::string& key) -> ByteViewOptional {
     return val;
 }
 
-auto CacheGroup::LoadFromPeer(Peer* peer, const std::string& key) -> ByteViewOptional {
+auto KCacheGroup::LoadFromPeer(Peer* peer, const std::string& key) -> ByteViewOptional {
     auto value = peer->Get(name_, key);
     if (!value) {
         return std::nullopt;

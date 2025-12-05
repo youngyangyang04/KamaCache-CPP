@@ -9,16 +9,19 @@
 #include <fmt/base.h>
 #include <fmt/core.h>
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 #include <spdlog/spdlog.h>
 
 #include "kcache/cache.h"
 #include "kcache/group.h"
-#include "kcache/grpc_server.h"
+#include "kcache/server.h"
 
 using namespace kcache;
 
 DEFINE_int32(port, 8001, "节点端口");
 DEFINE_string(node, "A", "节点标识符");
+DEFINE_string(group, "default", "缓存组名称");
+DEFINE_string(log_level, "info", "日志级别， 可选值：trace, debug, info, warn, error, critical");
 DEFINE_string(etcd_endpoints, "http://127.0.0.1:2379", "etcd地址");
 
 // 模拟数据库
@@ -43,7 +46,7 @@ int main(int argc, char** argv) {
         // 创建节点，同时注册到etcd
         ServerOptions opts;
         opts.etcd_endpoints = {FLAGS_etcd_endpoints};
-        auto node = std::make_unique<CacheGrpcServer>(addr, service_name, opts);
+        auto node = std::make_unique<KCacheServer>(addr, service_name, opts);
         spdlog::info("[node{}] server created successfully", FLAGS_node);
 
         // 启动节点
@@ -73,7 +76,7 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_for(std::chrono::seconds(5));  // 等待服务器启动
 
         // 创建缓存组
-        auto& group = MakeCacheGroup("test", 2 << 20, [&](const std::string& key) -> ByteViewOptional {
+        auto& group = MakeCacheGroup(FLAGS_group, 2 << 20, [&](const std::string& key) -> ByteViewOptional {
             if (db.find(key) != db.end()) {
                 spdlog::info(">_< search [{}] from db\n", key);
                 return ByteView{db[key]};
